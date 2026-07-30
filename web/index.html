@@ -8,7 +8,7 @@
       name="description"
       content="自动追踪硒代谢、硒蛋白、氧化还原、铁死亡、免疫炎症及硒相关疾病机制研究。"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260730-public" />
+    <link rel="stylesheet" href="./styles.css?v=20260730-journals" />
   </head>
   <body>
     <header class="topbar">
@@ -32,6 +32,7 @@
           </button>
         </div>
         <a class="icon-link" id="configureLink" href="#" target="_blank" rel="noreferrer" title="配置研究方向">⚙</a>
+        <button class="icon-link" id="dataActionsButton" type="button" title="刷新或清空后重抓文献" aria-label="刷新或清空后重抓文献">↻</button>
         <a class="icon-link" id="actionsLink" href="#" target="_blank" rel="noreferrer" title="查看更新任务">↗</a>
       </nav>
     </header>
@@ -70,6 +71,22 @@
               <option value="low">Low</option>
             </select>
           </label>
+          <label class="field journal-filter">
+            <span>期刊</span>
+            <select id="journalFilter">
+              <option value="all">全部期刊</option>
+              <option value="cns">CNS 主刊</option>
+              <option value="nature">Nature 系列</option>
+              <option value="science">Science 系列</option>
+              <option value="cell">Cell 系列</option>
+              <option value="top">其他 Top 期刊</option>
+              <option value="q1">JCR Q1</option>
+              <option value="q2">JCR Q2</option>
+              <option value="q3">JCR Q3</option>
+              <option value="q4">JCR Q4</option>
+              <option value="unconfigured">指标待配置</option>
+            </select>
+          </label>
           <label class="field search">
             <span>搜索</span>
             <input id="searchInput" type="search" placeholder="标题、作者、关键词" />
@@ -86,6 +103,31 @@
       </section>
     </main>
 
+    <dialog class="data-dialog" id="dataActionsDialog" aria-labelledby="dataActionsTitle">
+      <div class="dialog-head">
+        <div>
+          <p>Literature Update</p>
+          <h2 id="dataActionsTitle">更新文献数据</h2>
+        </div>
+        <button class="dialog-close" id="dataActionsClose" type="button" aria-label="关闭">×</button>
+      </div>
+      <p class="dialog-intro">
+        网页不会保存 GitHub 权限或访问令牌。选择操作后会进入仓库的 Actions 页面，再点击
+        <strong>Run workflow</strong> 即可安全执行。
+      </p>
+      <div class="dialog-actions">
+        <a class="workflow-action refresh-action" id="refreshPapersLink" href="#" target="_blank" rel="noreferrer">
+          <span class="workflow-icon">↻</span>
+          <span><strong>刷新重新抓取</strong><small>保留历史缓存，抓取最新文献并补齐期刊信息；clear_cache 保持关闭。</small></span>
+        </a>
+        <a class="workflow-action clear-action" id="clearPapersLink" href="#" target="_blank" rel="noreferrer">
+          <span class="workflow-icon">⌫</span>
+          <span><strong>清空后重抓</strong><small>忽略已有文献缓存，从数据源重新建立列表；运行时打开 clear_cache。</small></span>
+        </a>
+      </div>
+      <p class="dialog-note">清空后重抓不会删除仓库代码，但会替换下一次发布的文献列表。</p>
+    </dialog>
+
     <template id="paperTemplate">
       <article class="paper-card">
         <div class="paper-main">
@@ -97,6 +139,12 @@
           </div>
           <h3 class="paper-title"></h3>
           <p class="paper-authors"></p>
+          <div class="journal-meta">
+            <span class="journal-name"></span>
+            <span class="journal-impact"></span>
+            <span class="journal-quartile"></span>
+            <span class="journal-tier"></span>
+          </div>
           <div class="paper-tags"></div>
           <dl class="summary-grid">
             <div><dt>问题</dt><dd class="summary-problem"></dd></div>
@@ -118,6 +166,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260730-public"></script>
+    <script src="./app.js?v=20260730-journals"></script>
   </body>
 </html>

@@ -1,0 +1,338 @@
+{
+  "metric_name": "Journal Impact Factor",
+  "metric_year": "2025",
+  "quartile_system": "JCR",
+  "source_url": "",
+  "note": "影响因子和分区按年度变化；同一期刊跨学科时可有多个分区。本表显示配置中的代表性分区，使用前请以本单位当年 JCR 数据为准。",
+  "journals": [
+    {
+      "name": "Nature",
+      "aliases": [],
+      "family": "nature",
+      "tier": "flagship",
+      "impact_factor": 56.1,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Communications",
+      "aliases": ["Nat Commun"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 18.1,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Scientific Reports",
+      "aliases": ["Sci Rep"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 4.9,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Scientific Data",
+      "aliases": ["Sci Data"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 7.2,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Communications Biology",
+      "aliases": ["Commun Biol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 5.8,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Biotechnology",
+      "aliases": ["Nat Biotechnol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 44.5,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Cancer",
+      "aliases": ["Nat Cancer"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 28.0,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Cell Biology",
+      "aliases": ["Nat Cell Biol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 22.7,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Chemical Biology",
+      "aliases": ["Nat Chem Biol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 15.8,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Genetics",
+      "aliases": ["Nat Genet"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 25.5,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Immunology",
+      "aliases": ["Nat Immunol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 26.5,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Medicine",
+      "aliases": ["Nat Med"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 52.5,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Metabolism",
+      "aliases": ["Nat Metab"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 27.5,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Microbiology",
+      "aliases": ["Nat Microbiol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 18.7,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Reviews Cancer",
+      "aliases": ["Nat Rev Cancer"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 60.7,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Reviews Immunology",
+      "aliases": ["Nat Rev Immunol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 47.1,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Nature Reviews Molecular Cell Biology",
+      "aliases": ["Nat Rev Mol Cell Biol"],
+      "family": "nature",
+      "tier": "family",
+      "impact_factor": 118.0,
+      "quartile": "Q1",
+      "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+    },
+    {
+      "name": "Science",
+      "aliases": [],
+      "family": "science",
+      "tier": "flagship",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Science Advances",
+      "aliases": ["Sci Adv"],
+      "family": "science",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Science Translational Medicine",
+      "aliases": ["Sci Transl Med"],
+      "family": "science",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Science Immunology",
+      "aliases": ["Sci Immunol"],
+      "family": "science",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Science Signaling",
+      "aliases": ["Sci Signal"],
+      "family": "science",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cell",
+      "aliases": [],
+      "family": "cell",
+      "tier": "flagship",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cancer Cell",
+      "aliases": [],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cell Metabolism",
+      "aliases": ["Cell Metab"],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Molecular Cell",
+      "aliases": ["Mol Cell"],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Immunity",
+      "aliases": [],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cell Host & Microbe",
+      "aliases": ["Cell Host Microbe", "Cell Host and Microbe"],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cell Stem Cell",
+      "aliases": [],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Cell Reports",
+      "aliases": ["Cell Rep"],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Current Biology",
+      "aliases": ["Curr Biol"],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Neuron",
+      "aliases": [],
+      "family": "cell",
+      "tier": "family",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "The New England Journal of Medicine",
+      "aliases": ["New England Journal of Medicine", "N Engl J Med", "NEJM"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "The Lancet",
+      "aliases": ["Lancet"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "JAMA",
+      "aliases": ["Journal of the American Medical Association"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Proceedings of the National Academy of Sciences",
+      "aliases": ["Proc Natl Acad Sci U S A", "PNAS"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Redox Biology",
+      "aliases": ["Redox Biol"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Free Radical Biology and Medicine",
+      "aliases": ["Free Radic Biol Med"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    },
+    {
+      "name": "Antioxidants & Redox Signaling",
+      "aliases": ["Antioxid Redox Signal", "Antioxidants and Redox Signaling"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": null,
+      "quartile": "Q1"
+    }
+  ]
+}

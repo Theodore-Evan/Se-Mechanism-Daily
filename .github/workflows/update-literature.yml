@@ -1,4 +1,5 @@
-name: Update literature website
+name: 更新 Se 文献网站
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.clear_cache && '清空后重抓文献' || '刷新文献并发布' }}
 
 on:
   push:
@@ -8,11 +9,11 @@ on:
   workflow_dispatch:
     inputs:
       lookback_days:
-        description: "How many recent days to search"
+        description: "向前检索多少天（刷新时推荐 7）"
         required: false
         default: "7"
       clear_cache:
-        description: "Rebuild the paper list without the previous cache"
+        description: "清空已有文献缓存后重新抓取"
         type: boolean
         required: false
         default: false

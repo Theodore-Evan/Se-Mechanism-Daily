@@ -12,12 +12,16 @@ from scripts.collect_papers import (
     Topic,
     arxiv_query,
     attach_best_match,
+    build_journal_profile,
     canonical_key,
     collect,
     deduplicate,
+    inferred_journal_group,
+    load_journal_metrics,
     parse_config,
     parse_datetime,
     reconstruct_abstract,
+    scholar_journal,
     scholar_year,
     summarize_with_ai,
 )
@@ -69,6 +73,10 @@ class NormalizationTests(unittest.TestCase):
             "2026",
         )
 
+    def test_extracts_scholar_journal(self) -> None:
+        result = {"publication_info": {"summary": "A Author - Redox Biology, 2026 - Elsevier"}}
+        self.assertEqual(scholar_journal(result), "Redox Biology")
+
     def test_deduplicates_by_title_and_merges_sources(self) -> None:
         papers = deduplicate(
             [
@@ -89,6 +97,39 @@ class NormalizationTests(unittest.TestCase):
 
     def test_doi_is_preferred_as_canonical_key(self) -> None:
         self.assertEqual(canonical_key({"doi": "10.1000/ABC", "id": "source:1"}), "doi:10.1000/abc")
+
+
+class JournalMetadataTests(unittest.TestCase):
+    def test_identifies_cns_and_subjournal_families(self) -> None:
+        self.assertEqual(inferred_journal_group("Nature"), ("nature", "flagship"))
+        self.assertEqual(inferred_journal_group("Science Advances"), ("science", "family"))
+        self.assertEqual(inferred_journal_group("Cell Metabolism"), ("cell", "family"))
+
+    def test_matches_alias_and_attaches_metrics(self) -> None:
+        metrics = {
+            "metric_name": "Journal Impact Factor",
+            "metric_year": "2025",
+            "quartile_system": "JCR",
+            "journals": [
+                {
+                    "name": "Nature Communications",
+                    "aliases": ["Nat Commun"],
+                    "family": "nature",
+                    "tier": "family",
+                    "impact_factor": 18.1,
+                    "quartile": "Q1",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "journal_metrics.json"
+            path.write_text(json.dumps(metrics), encoding="utf-8")
+            settings, index = load_journal_metrics(path)
+        profile = build_journal_profile({"journal": "Nat Commun"}, settings, index)
+        self.assertEqual(profile["name"], "Nature Communications")
+        self.assertEqual(profile["impact_factor"], 18.1)
+        self.assertEqual(profile["quartile"], "Q1")
+        self.assertEqual(profile["labels"], ["Nature 系列"])
 
 
 class ScoringTests(unittest.TestCase):

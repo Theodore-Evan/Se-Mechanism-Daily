@@ -4,7 +4,7 @@ const THEMES = new Set(["dark", "light", "eye"]);
 const state = {
   data: { papers: [], topics: [], stats: {} },
   theme: "dark",
-  filters: { query: "", topic: "all", level: "all", view: "daily", date: "" },
+  filters: { query: "", topic: "all", level: "all", journal: "all", view: "daily", date: "" },
 };
 
 const nodes = {
@@ -20,6 +20,7 @@ const nodes = {
   paperList: document.querySelector("#paperList"),
   topicFilter: document.querySelector("#topicFilter"),
   levelFilter: document.querySelector("#levelFilter"),
+  journalFilter: document.querySelector("#journalFilter"),
   dateFilter: document.querySelector("#dateFilter"),
   searchInput: document.querySelector("#searchInput"),
   themeOptions: document.querySelectorAll("[data-theme-option]"),
@@ -27,6 +28,11 @@ const nodes = {
   template: document.querySelector("#paperTemplate"),
   configureLink: document.querySelector("#configureLink"),
   actionsLink: document.querySelector("#actionsLink"),
+  dataActionsButton: document.querySelector("#dataActionsButton"),
+  dataActionsDialog: document.querySelector("#dataActionsDialog"),
+  dataActionsClose: document.querySelector("#dataActionsClose"),
+  refreshPapersLink: document.querySelector("#refreshPapersLink"),
+  clearPapersLink: document.querySelector("#clearPapersLink"),
 };
 
 function repositoryUrl() {
@@ -41,10 +47,14 @@ function configureRepositoryLinks() {
   if (!repository) {
     nodes.configureLink.hidden = true;
     nodes.actionsLink.hidden = true;
+    nodes.dataActionsButton.hidden = true;
     return;
   }
+  const workflowUrl = `${repository}/actions/workflows/update-literature.yml`;
   nodes.configureLink.href = `${repository}/issues/new?template=research-interests.md`;
-  nodes.actionsLink.href = `${repository}/actions/workflows/update-literature.yml`;
+  nodes.actionsLink.href = workflowUrl;
+  nodes.refreshPapersLink.href = workflowUrl;
+  nodes.clearPapersLink.href = workflowUrl;
 }
 
 function storedTheme() {
@@ -137,6 +147,27 @@ function levelOf(paper) {
   return String(paper.best_match?.level || "low").toLowerCase();
 }
 
+function journalOf(paper) {
+  return paper.journal_profile || {};
+}
+
+function matchesJournalFilter(paper) {
+  const filter = state.filters.journal;
+  if (filter === "all") return true;
+  const journal = journalOf(paper);
+  const family = String(journal.family || "").toLowerCase();
+  const tier = String(journal.tier || "standard").toLowerCase();
+  const quartile = String(journal.quartile || "").toLowerCase();
+  if (filter === "cns") return tier === "flagship";
+  if (["nature", "science", "cell"].includes(filter)) return family === filter;
+  if (filter === "top") return tier === "top";
+  if (["q1", "q2", "q3", "q4"].includes(filter)) return quartile === filter;
+  if (filter === "unconfigured") {
+    return typeof journal.impact_factor !== "number" || !journal.quartile;
+  }
+  return true;
+}
+
 function textIncludes(paper, query) {
   if (!query) return true;
   const haystack = [
@@ -144,6 +175,9 @@ function textIncludes(paper, query) {
     paper.summary,
     (paper.authors || []).join(" "),
     (paper.categories || []).join(" "),
+    paper.journal,
+    paper.journal_profile?.name,
+    (paper.journal_profile?.labels || []).join(" "),
     paper.best_match?.reason,
     ...Object.values(paper.chinese_summary || {}),
   ]
@@ -156,6 +190,7 @@ function matchesFilters(paper) {
   if (!textIncludes(paper, state.filters.query)) return false;
   if (state.filters.topic !== "all" && paper.best_match?.topic_id !== state.filters.topic) return false;
   if (state.filters.level !== "all" && levelOf(paper) !== state.filters.level) return false;
+  if (!matchesJournalFilter(paper)) return false;
   const date = selectedDate();
   const collectedAt = collectionTime(paper);
   if (state.filters.view === "daily") return dateKey(collectedAt) === state.filters.date;
@@ -186,6 +221,38 @@ function safeFilename(paper) {
   return `${title || "paper"}.pdf`;
 }
 
+function renderJournalDetails(node, paper) {
+  const profile = journalOf(paper);
+  const journalName = profile.name || paper.journal || "期刊待补充";
+  const impactFactor = Number(profile.impact_factor);
+  const hasImpactFactor = typeof profile.impact_factor === "number" && Number.isFinite(impactFactor);
+  const metricYear = profile.metric_year ? ` · ${profile.metric_year}` : "";
+  const quartileSystem = profile.quartile_system || "JCR";
+
+  setText(node, ".journal-name", `期刊 · ${journalName}`);
+  setText(node, ".journal-impact", hasImpactFactor ? `JIF ${impactFactor.toFixed(1)}${metricYear}` : "JIF 待配置");
+  setText(
+    node,
+    ".journal-quartile",
+    profile.quartile ? `${quartileSystem} ${profile.quartile}` : `${quartileSystem} 待配置`,
+  );
+
+  const source = profile.metric_source || state.data.stats?.journal_metric_source;
+  const note = state.data.stats?.journal_metric_note || "期刊指标按年度变化，请以当年数据源为准。";
+  node.querySelector(".journal-impact").title = source ? `${note}\n来源：${source}` : note;
+  node.querySelector(".journal-quartile").title = note;
+
+  const tier = node.querySelector(".journal-tier");
+  const labels = profile.labels || [];
+  tier.textContent = labels.join(" · ");
+  tier.hidden = labels.length === 0;
+  tier.classList.toggle("flagship", profile.tier === "flagship");
+  tier.classList.toggle("nature", profile.family === "nature" && profile.tier !== "flagship");
+  tier.classList.toggle("science", profile.family === "science" && profile.tier !== "flagship");
+  tier.classList.toggle("cell", profile.family === "cell" && profile.tier !== "flagship");
+  tier.classList.toggle("top", profile.tier === "top");
+}
+
 function renderPaper(paper) {
   const node = nodes.template.content.firstElementChild.cloneNode(true);
   const best = paper.best_match || {};
@@ -204,6 +271,7 @@ function renderPaper(paper) {
   setText(node, ".paper-source", paper.source || "文献源");
   setText(node, ".paper-title", paper.title);
   setText(node, ".paper-authors", (paper.authors || []).slice(0, 8).join(", "));
+  renderJournalDetails(node, paper);
   setText(node, ".summary-problem", summary.problem);
   setText(node, ".summary-method", summary.method);
   setText(node, ".summary-innovation", summary.innovation);
@@ -343,6 +411,10 @@ function bindEvents() {
     state.filters.level = event.target.value;
     render();
   });
+  nodes.journalFilter.addEventListener("change", (event) => {
+    state.filters.journal = event.target.value;
+    render();
+  });
   nodes.dateFilter.addEventListener("change", (event) => {
     state.filters.date = event.target.value;
     updateStats();
@@ -354,6 +426,14 @@ function bindEvents() {
       for (const item of nodes.tabs) item.classList.toggle("active", item === tab);
       render();
     });
+  }
+  nodes.dataActionsButton.addEventListener("click", () => nodes.dataActionsDialog.showModal());
+  nodes.dataActionsClose.addEventListener("click", () => nodes.dataActionsDialog.close());
+  nodes.dataActionsDialog.addEventListener("click", (event) => {
+    if (event.target === nodes.dataActionsDialog) nodes.dataActionsDialog.close();
+  });
+  for (const link of [nodes.refreshPapersLink, nodes.clearPapersLink]) {
+    link.addEventListener("click", () => nodes.dataActionsDialog.close());
   }
 }
 

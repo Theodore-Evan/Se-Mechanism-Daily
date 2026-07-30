@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "interests.json"
+DEFAULT_JOURNAL_METRICS = ROOT / "config" / "journal_metrics.json"
 DEFAULT_OUTPUT = ROOT / "web" / "data" / "papers.json"
 ARXIV_API = "https://export.arxiv.org/api/query"
 PUBMED_EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -160,6 +161,127 @@ def normalize_title(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", text)
 
 
+def normalize_journal_name(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", normalize_space(value)).casefold().replace("&", " and ")
+    text = re.sub(r"\b(the|journal of)\b", " ", text)
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def load_journal_metrics(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        data = {}
+    settings = {
+        "metric_name": normalize_space(data.get("metric_name")) or "Journal Impact Factor",
+        "metric_year": str(data.get("metric_year") or "").strip(),
+        "quartile_system": normalize_space(data.get("quartile_system")) or "JCR",
+        "source_url": normalize_space(data.get("source_url")),
+        "note": normalize_space(data.get("note")),
+    }
+    index: dict[str, dict[str, Any]] = {}
+    for item in data.get("journals", []):
+        if not isinstance(item, dict) or not normalize_space(item.get("name")):
+            continue
+        entry = {
+            **item,
+            "name": normalize_space(item.get("name")),
+            "family": normalize_space(item.get("family")).lower(),
+            "tier": normalize_space(item.get("tier")).lower() or "standard",
+            "metric_year": str(item.get("metric_year") or settings["metric_year"]).strip(),
+            "metric_source": normalize_space(item.get("source_url")) or settings["source_url"],
+            "quartile_system": normalize_space(item.get("quartile_system")) or settings["quartile_system"],
+        }
+        aliases = [entry["name"], *(item.get("aliases") or [])]
+        for alias in aliases:
+            key = normalize_journal_name(alias)
+            if key:
+                index[key] = entry
+    return settings, index
+
+
+SCIENCE_FAMILY = {
+    "science advances",
+    "science immunology",
+    "science robotics",
+    "science signaling",
+    "science translational medicine",
+}
+CELL_FAMILY = {
+    "cancer cell",
+    "cell chemical biology",
+    "cell host and microbe",
+    "cell metabolism",
+    "cell reports",
+    "cell stem cell",
+    "current biology",
+    "immunity",
+    "molecular cell",
+    "neuron",
+}
+
+
+def inferred_journal_group(journal: str) -> tuple[str, str]:
+    name = normalize_space(journal).casefold().replace("&", "and")
+    if name in {"nature", "science", "cell"}:
+        return name, "flagship"
+    if (
+        name.startswith("nature ")
+        or name.startswith("nature reviews ")
+        or name.startswith("npj ")
+        or name in {"nature communications", "scientific data", "scientific reports"}
+        or name.startswith("communications ")
+    ):
+        return "nature", "family"
+    if name in SCIENCE_FAMILY:
+        return "science", "family"
+    if name in CELL_FAMILY or name.startswith("trends in "):
+        return "cell", "family"
+    return "", "standard"
+
+
+def build_journal_profile(
+    paper: dict[str, Any],
+    settings: dict[str, Any],
+    index: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    journal = normalize_space(paper.get("journal"))
+    previous_profile = paper.get("journal_profile") if isinstance(paper.get("journal_profile"), dict) else {}
+    if not journal:
+        journal = normalize_space(previous_profile.get("name"))
+    entry = index.get(normalize_journal_name(journal), {})
+    family, tier = inferred_journal_group(journal)
+    family = normalize_space(entry.get("family")).lower() or family
+    tier = normalize_space(entry.get("tier")).lower() or tier
+    impact_factor = entry.get("impact_factor")
+    if not isinstance(impact_factor, (int, float)):
+        impact_factor = None
+    quartile = normalize_space(entry.get("quartile")).upper()
+    labels = []
+    if tier == "flagship":
+        labels.append("CNS")
+    elif family == "nature":
+        labels.append("Nature 系列")
+    elif family == "science":
+        labels.append("Science 系列")
+    elif family == "cell":
+        labels.append("Cell 系列")
+    if tier == "top" and "Top" not in labels:
+        labels.append("Top")
+    return {
+        "name": normalize_space(entry.get("name")) or journal,
+        "family": family,
+        "tier": tier,
+        "is_top": tier in {"flagship", "family", "top"},
+        "labels": labels,
+        "impact_factor": impact_factor,
+        "metric_name": settings["metric_name"],
+        "metric_year": str(entry.get("metric_year") or settings["metric_year"]),
+        "metric_source": normalize_space(entry.get("metric_source")) or settings["source_url"],
+        "quartile": quartile,
+        "quartile_system": normalize_space(entry.get("quartile_system")) or settings["quartile_system"],
+    }
+
+
 def canonical_key(paper: dict[str, Any]) -> str:
     doi = str(paper.get("doi") or "").lower().removeprefix("https://doi.org/").strip()
     if doi:
@@ -263,7 +385,10 @@ def fetch_arxiv(topic: Topic, limit: int) -> list[dict[str, Any]]:
         "sortOrder": "descending",
     }
     root = ET.fromstring(request_text(f"{ARXIV_API}?{urllib.parse.urlencode(params)}"))
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "arxiv": "http://arxiv.org/schemas/atom",
+    }
     papers = []
     for entry in root.findall("atom:entry", ns):
         identifier = xml_text(entry, "atom:id", ns)
@@ -283,6 +408,7 @@ def fetch_arxiv(topic: Topic, limit: int) -> list[dict[str, Any]]:
                 "published": xml_text(entry, "atom:published", ns),
                 "updated": xml_text(entry, "atom:updated", ns),
                 "categories": [node.attrib.get("term", "") for node in entry.findall("atom:category", ns)],
+                "journal": xml_text(entry, "arxiv:journal_ref", ns) or "arXiv",
                 "paper_url": identifier,
                 "pdf_url": links.get("pdf", ""),
             }
@@ -384,6 +510,9 @@ def fetch_pubmed(topic: Topic, limit: int) -> list[dict[str, Any]]:
                     for node in article.findall(".//MeshHeading/DescriptorName")
                     if normalize_space(node.text)
                 ],
+                "journal": normalize_space(article.findtext(".//Journal/Title"))
+                or normalize_space(summary.get("fulljournalname"))
+                or normalize_space(summary.get("source")),
                 "paper_url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
                 "pdf_url": "",
                 "doi": doi,
@@ -431,6 +560,7 @@ def fetch_openalex(topic: Topic, limit: int) -> list[dict[str, Any]]:
                     for topic_item in item.get("topics", [])
                     if normalize_space(topic_item.get("display_name"))
                 ],
+                "journal": normalize_space((primary.get("source") or {}).get("display_name")),
                 "paper_url": primary.get("landing_page_url") or item.get("doi") or item.get("id") or "",
                 "pdf_url": best.get("pdf_url") or primary.get("pdf_url") or "",
                 "doi": doi,
@@ -454,7 +584,7 @@ def fetch_crossref(topic: Topic, limit: int) -> list[dict[str, Any]]:
         "rows": min(limit, 1000),
         "sort": "published",
         "order": "desc",
-        "select": "DOI,title,abstract,author,published,published-online,published-print,issued,created,URL,link,subject",
+        "select": "DOI,title,abstract,author,published,published-online,published-print,issued,created,URL,link,subject,container-title",
     }
     contact = os.getenv("CROSSREF_EMAIL") or os.getenv("CONTACT_EMAIL")
     headers = {"User-Agent": f"se-mechanism-literature-tracker/1.0 (mailto:{contact})"} if contact else None
@@ -481,6 +611,7 @@ def fetch_crossref(topic: Topic, limit: int) -> list[dict[str, Any]]:
                 "published": crossref_date(item),
                 "updated": crossref_date(item),
                 "categories": [normalize_space(value) for value in item.get("subject", []) if normalize_space(value)],
+                "journal": normalize_space((item.get("container-title") or [""])[0]),
                 "paper_url": item.get("URL") or (f"https://doi.org/{doi}" if doi else ""),
                 "pdf_url": pdf_url,
                 "doi": doi,
@@ -493,6 +624,15 @@ def scholar_year(result: dict[str, Any]) -> str:
     summary = str((result.get("publication_info") or {}).get("summary") or "")
     matches = re.findall(r"\b(?:19|20)\d{2}\b", summary)
     return matches[-1] if matches else ""
+
+
+def scholar_journal(result: dict[str, Any]) -> str:
+    summary = normalize_space((result.get("publication_info") or {}).get("summary"))
+    parts = [part.strip(" ,") for part in summary.split(" - ") if part.strip(" ,")]
+    if len(parts) < 2:
+        return ""
+    candidate = re.sub(r",?\s*\b(?:19|20)\d{2}\b.*$", "", parts[1]).strip(" ,")
+    return candidate
 
 
 def fetch_google_scholar(topic: Topic, limit: int) -> list[dict[str, Any]]:
@@ -529,6 +669,7 @@ def fetch_google_scholar(topic: Topic, limit: int) -> list[dict[str, Any]]:
                 "published": scholar_year(result),
                 "updated": utc_now().isoformat(),
                 "categories": [],
+                "journal": scholar_journal(result),
                 "paper_url": link,
                 "pdf_url": pdf_url,
             }
@@ -552,7 +693,7 @@ def merge_paper(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     for key in ("summary", "title"):
         if len(str(right.get(key) or "")) > len(str(merged.get(key) or "")):
             merged[key] = right[key]
-    for key in ("paper_url", "pdf_url", "doi", "published", "updated"):
+    for key in ("paper_url", "pdf_url", "doi", "published", "updated", "journal"):
         if not merged.get(key) and right.get(key):
             merged[key] = right[key]
     merged["authors"] = list(dict.fromkeys([*(left.get("authors") or []), *(right.get("authors") or [])]))
@@ -779,11 +920,13 @@ def collect(
     max_per_topic: int,
     max_summaries: int,
     clear_cache: bool,
+    journal_metrics_path: Path = DEFAULT_JOURNAL_METRICS,
 ) -> dict[str, Any]:
     now = utc_now()
     repository_config = read_json(config_path, {})
     config, config_source = issue_config(repository_config)
     sources, topics = parse_config(config)
+    journal_settings, journal_index = load_journal_metrics(journal_metrics_path)
     allowed_sources = {
         value.strip().lower()
         for value in os.getenv("PAPER_SOURCES", "").split(",")
@@ -882,6 +1025,8 @@ def collect(
         reverse=True,
     )
     papers = papers[: max(1, int(os.getenv("MAX_STORED_PAPERS", "50")))]
+    for paper in papers:
+        paper["journal_profile"] = build_journal_profile(paper, journal_settings, journal_index)
 
     jobs: list[tuple[int, Topic, dict[str, Any]]] = []
     topics_by_id = {topic.id: topic for topic in topics}
@@ -943,6 +1088,11 @@ def collect(
             "ai_summary_last_error": summary_last_error,
             "paper_count": len(papers),
             "new_or_refreshed_count": len(candidates),
+            "journal_metric_name": journal_settings["metric_name"],
+            "journal_metric_year": journal_settings["metric_year"],
+            "journal_quartile_system": journal_settings["quartile_system"],
+            "journal_metric_source": journal_settings["source_url"],
+            "journal_metric_note": journal_settings["note"],
             "source_stats": source_stats,
         },
     }
@@ -953,6 +1103,7 @@ def collect(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect selenium-mechanism literature for a static website.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--journal-metrics", type=Path, default=DEFAULT_JOURNAL_METRICS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--lookback-days", type=int, default=int(os.getenv("LOOKBACK_DAYS", "7")))
     parser.add_argument("--max-per-topic", type=int, default=int(os.getenv("MAX_PER_TOPIC", "10")))
@@ -966,6 +1117,7 @@ def main() -> int:
         max_per_topic=max(1, args.max_per_topic),
         max_summaries=max(0, args.max_summaries),
         clear_cache=args.clear_cache,
+        journal_metrics_path=args.journal_metrics,
     )
     print(f"Wrote {len(payload['papers'])} papers to {args.output}")
     return 0

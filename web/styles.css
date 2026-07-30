@@ -243,7 +243,10 @@ a {
   border-radius: 8px;
   background: var(--button-bg);
   color: var(--text);
+  cursor: pointer;
+  font: inherit;
   font-size: 18px;
+  padding: 0;
   text-decoration: none;
 }
 
@@ -324,7 +327,7 @@ a {
 
 .toolbar {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   align-items: end;
   border: 1px solid var(--line);
@@ -381,7 +384,12 @@ a {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(130px, 0.7fr) minmax(160px, 1fr) minmax(120px, 0.6fr) minmax(220px, 1.4fr);
+  grid-template-columns:
+    minmax(120px, 0.65fr)
+    minmax(150px, 0.9fr)
+    minmax(110px, 0.55fr)
+    minmax(165px, 0.95fr)
+    minmax(210px, 1.35fr);
   gap: 10px;
 }
 
@@ -524,6 +532,62 @@ select:focus,
   line-height: 1.5;
 }
 
+.journal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.journal-name,
+.journal-impact,
+.journal-quartile,
+.journal-tier {
+  min-height: 25px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.journal-name {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(45, 212, 191, 0.07);
+  color: var(--teal);
+}
+
+.journal-impact,
+.journal-quartile {
+  color: var(--muted);
+}
+
+.journal-tier {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--gold);
+}
+
+.journal-tier.nature {
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.1);
+  color: var(--teal);
+}
+
+.journal-tier.science {
+  border-color: rgba(251, 113, 133, 0.36);
+  background: rgba(251, 113, 133, 0.1);
+  color: var(--coral);
+}
+
+.journal-tier.cell {
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+
 .paper-tags {
   display: flex;
   flex-wrap: wrap;
@@ -622,6 +686,143 @@ select:focus,
   text-align: center;
 }
 
+.data-dialog {
+  width: min(660px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  padding: 0;
+}
+
+.data-dialog::backdrop {
+  background: rgba(4, 7, 7, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+}
+
+.dialog-head p {
+  margin: 0 0 5px;
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dialog-head h2 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.dialog-close {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--button-bg);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+}
+
+.dialog-intro,
+.dialog-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.dialog-intro {
+  margin: 0;
+  padding: 17px 20px 0;
+}
+
+.dialog-intro strong {
+  color: var(--text);
+}
+
+.dialog-actions {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px;
+}
+
+.workflow-action {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--button-bg);
+  padding: 13px;
+  text-decoration: none;
+}
+
+.workflow-action:hover {
+  border-color: var(--teal);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.workflow-action.clear-action:hover {
+  border-color: var(--coral);
+  background: rgba(251, 113, 133, 0.07);
+}
+
+.workflow-icon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(45, 212, 191, 0.32);
+  border-radius: 8px;
+  color: var(--teal);
+  font-size: 19px;
+}
+
+.clear-action .workflow-icon {
+  border-color: rgba(251, 113, 133, 0.34);
+  color: var(--coral);
+}
+
+.workflow-action strong,
+.workflow-action small {
+  display: block;
+}
+
+.workflow-action strong {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.workflow-action small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dialog-note {
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding: 13px 20px 16px;
+}
+
 @media (max-width: 1100px) {
   .overview,
   .toolbar {
@@ -645,10 +846,11 @@ select:focus,
 
   .top-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .theme-switcher {
-    flex: 1 1 220px;
+    flex: 1 1 100%;
     justify-content: space-between;
   }
 

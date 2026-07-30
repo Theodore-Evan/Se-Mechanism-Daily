@@ -13,6 +13,9 @@
 
 - 文献源：PubMed、Google Scholar（通过 SerpApi）、OpenAlex、Crossref 和生命科学 arXiv
 - 自动更新：GitHub Actions 每天运行，也支持手动触发
+- 数据管理：网页右上角可选择“刷新重新抓取”或“清空后重抓”
+- 期刊信息：展示期刊名、带年份的 JIF、JCR 分区，以及 CNS / Nature / Science / Cell 系列和 Top 标记
+- 顶刊筛选：支持 CNS 主刊、三大期刊系列、其他 Top 期刊和 JCR Q1–Q4 筛选
 - 机制摘要：可选用智谱 GLM 生成结构化中文摘要；未配置模型时使用保守的基础摘要
 - 研究方向配置：编辑 JSON 文件，或通过仓库中的 `Research Interests` Issue 修改
 - 静态部署：生成纯 HTML、CSS 和 JavaScript，可直接部署到 GitHub Pages
@@ -51,7 +54,7 @@ GitHub Pages 静态网站
    | Variable | `ZHIPU_MODEL` | 可选；默认 `glm-4-flash-250414` |
    | Variable | `CONTACT_EMAIL` | 可选，提供给 Crossref、OpenAlex 或 NCBI 的 API 联系地址 |
 
-4. 在 **Actions → Update literature website → Run workflow** 手动运行一次。
+4. 在 **Actions → 更新 Se 文献网站 → Run workflow** 手动运行一次。
 5. 部署完成后，网站地址通常为：
 
    ```text
@@ -106,6 +109,40 @@ API Key 只能保存在 GitHub Actions Secrets 中，不要写入代码、Issue�
 ```
 
 Google Scholar 需要 `SERPAPI_API_KEY`。缺少某一来源的密钥或某一 API 暂时不可用时，采集器会记录该来源失败并继续处理其他来源。
+
+## 刷新与清空后重抓
+
+网页右上角的 `↻` 按钮提供两个入口：
+
+- **刷新重新抓取**：进入 GitHub Actions 后直接运行，保留历史文献缓存，并抓取最新文献、补齐期刊信息。
+- **清空后重抓**：进入 GitHub Actions 后勾选 `clear_cache` 再运行，忽略原有文献缓存，从各数据源重新建立列表。
+
+网站是纯静态 GitHub Pages，不能安全保存 GitHub 访问令牌，因此不会在浏览器里直接触发有写权限的工作流。入口会打开已登录的 GitHub Actions 页面，由仓库维护者确认运行；这可避免把 Token 暴露给访客。
+
+## 期刊指标与顶刊规则
+
+期刊指标和别名位于 [`config/journal_metrics.json`](config/journal_metrics.json)。采集器会从 PubMed、OpenAlex、Crossref、Google Scholar 和 arXiv 读取期刊名，然后用规范名或别名匹配该配置。
+
+每个期刊条目支持：
+
+```json
+{
+  "name": "Nature Communications",
+  "aliases": ["Nat Commun"],
+  "family": "nature",
+  "tier": "family",
+  "impact_factor": 18.1,
+  "quartile": "Q1",
+  "source_url": "https://www.nature.com/nature-portfolio/about-journals/journal-metrics"
+}
+```
+
+- `family` 可写 `nature`、`science`、`cell` 或留空。
+- `tier` 可写 `flagship`、`family`、`top`、`standard`。
+- `impact_factor`、`quartile` 应与文件顶部的 `metric_year` 和 `quartile_system` 对应；未知值请保留 `null`，网页会显示“待配置”，不会猜测。
+- 一个期刊可能分属多个 JCR 学科并具有不同分区。默认配置展示代表性分区；正式评价或投稿决策前，应以所在机构可访问的当年 JCR 为准。
+
+默认收录的 Nature Portfolio JIF 来自其公开的年度期刊指标页。完整 JCR 数据及 Web of Science Journals API 属于 Clarivate 授权服务，因此本项目不抓取或内置未经授权的完整 JCR 数据库。Fork 后可以用本单位许可数据维护这个公开配置，但请先确认再分发权限。
 
 ## 本地运行
 
@@ -165,7 +202,9 @@ python scripts/collect_papers.py
 ├── .github/
 │   ├── ISSUE_TEMPLATE/research-interests.md
 │   └── workflows/update-literature.yml
-├── config/interests.json
+├── config/
+│   ├── interests.json
+│   └── journal_metrics.json
 ├── scripts/collect_papers.py
 ├── tests/test_collect_papers.py
 └── web/
