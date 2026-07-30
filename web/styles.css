@@ -481,6 +481,21 @@ select:focus,
   text-transform: uppercase;
 }
 
+.summary-status {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 4px 8px;
+}
+
+.summary-status.ai {
+  border-color: rgba(45, 212, 191, 0.35);
+  background: rgba(45, 212, 191, 0.09);
+  color: var(--teal);
+}
+
 .match-badge.high {
   background: var(--green);
 }

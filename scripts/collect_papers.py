@@ -53,6 +53,13 @@ class Source:
     name: str
 
 
+class APIRequestError(RuntimeError):
+    def __init__(self, status: int, message: str, retry_after: float | None = None) -> None:
+        super().__init__(f"HTTP {status}: {message}")
+        self.status = status
+        self.retry_after = retry_after
+
+
 def env_flag(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -111,8 +118,24 @@ def request_json(
         **(headers or {}),
     }
     request = urllib.request.Request(url, headers=request_headers, data=data)
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        message = body
+        try:
+            error_data = json.loads(body)
+            error_value = error_data.get("error", error_data)
+            message = error_value.get("message", str(error_value)) if isinstance(error_value, dict) else str(error_value)
+        except json.JSONDecodeError:
+            pass
+        retry_after = None
+        try:
+            retry_after = float(exc.headers.get("Retry-After", ""))
+        except (TypeError, ValueError):
+            pass
+        raise APIRequestError(exc.code, normalize_space(message)[:500], retry_after) from exc
 
 
 def request_text(url: str, *, timeout: float = 45) -> str:
@@ -604,6 +627,18 @@ def ai_enabled() -> bool:
     return bool(os.getenv("LLM_API_KEY", "").strip())
 
 
+SUMMARY_FIELDS = ("problem", "method", "innovation", "evidence", "limitations", "why_relevant")
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        field: {"type": "string"}
+        for field in SUMMARY_FIELDS
+    },
+    "required": list(SUMMARY_FIELDS),
+    "additionalProperties": False,
+}
+
+
 def parse_json_object(text: str) -> dict[str, Any]:
     cleaned = text.strip()
     match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
@@ -612,11 +647,8 @@ def parse_json_object(text: str) -> dict[str, Any]:
     return json.loads(match.group(0))
 
 
-def summarize_with_ai(topic: Topic, paper: dict[str, Any]) -> dict[str, str]:
-    api_key = os.getenv("LLM_API_KEY", "").strip()
-    base_url = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
-    model = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-    prompt = f"""你是一名生物医学文献编辑。只根据下列题录和摘要，用中文返回严格 JSON。
+def build_summary_prompt(topic: Topic, paper: dict[str, Any]) -> str:
+    return f"""你是一名生物医学文献编辑。只根据下列题录和摘要，用中文返回严格 JSON。
 字段必须是 problem、method、innovation、evidence、limitations、why_relevant；每个值是一段简洁文字。
 不得补造摘要中没有的实验、数字或因果结论。缺失信息应明确写“摘要未说明”。
 
@@ -626,6 +658,54 @@ def summarize_with_ai(topic: Topic, paper: dict[str, Any]) -> dict[str, str]:
 作者：{', '.join(paper.get('authors') or [])}
 摘要：{paper.get('summary') or '来源未提供摘要'}
 """
+
+
+def call_gemini_native(prompt: str, api_key: str, base_url: str, model: str) -> dict[str, Any]:
+    api_root = base_url.split("/openai", 1)[0].rstrip("/")
+    endpoint = f"{api_root}/models/{urllib.parse.quote(model, safe='')}:generateContent"
+    current_payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "responseFormat": {
+                "text": {
+                    "mimeType": "application/json",
+                    "schema": SUMMARY_SCHEMA,
+                }
+            },
+        },
+    }
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    try:
+        data = request_json(
+            endpoint,
+            headers=headers,
+            data=json.dumps(current_payload).encode("utf-8"),
+            timeout=float(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
+        )
+    except APIRequestError as exc:
+        if exc.status != 400:
+            raise
+        legacy_payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "responseMimeType": "application/json",
+                "responseSchema": SUMMARY_SCHEMA,
+            },
+        }
+        data = request_json(
+            endpoint,
+            headers=headers,
+            data=json.dumps(legacy_payload).encode("utf-8"),
+            timeout=float(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
+        )
+    parts = data["candidates"][0]["content"]["parts"]
+    content = "".join(str(part.get("text") or "") for part in parts)
+    return parse_json_object(content)
+
+
+def call_openai_compatible(prompt: str, api_key: str, base_url: str, model: str) -> dict[str, Any]:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -639,9 +719,35 @@ def summarize_with_ai(topic: Topic, paper: dict[str, Any]) -> dict[str, str]:
         timeout=float(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
     )
     content = data["choices"][0]["message"]["content"]
-    result = parse_json_object(content)
-    fields = ("problem", "method", "innovation", "evidence", "limitations", "why_relevant")
-    return {field: normalize_space(result.get(field)) or "摘要未说明。" for field in fields}
+    return parse_json_object(content)
+
+
+def summarize_with_ai(topic: Topic, paper: dict[str, Any]) -> dict[str, str]:
+    api_key = os.getenv("LLM_API_KEY", "").strip()
+    base_url = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
+    model = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    prompt = build_summary_prompt(topic, paper)
+    request_delay = max(0.0, float(os.getenv("LLM_REQUEST_DELAY_SECONDS", "0")))
+    if request_delay:
+        time.sleep(request_delay)
+    retries = max(1, int(os.getenv("LLM_RETRIES", "2")))
+    retry_base = max(1.0, float(os.getenv("LLM_RETRY_BASE_SECONDS", "15")))
+    for attempt in range(retries):
+        try:
+            if "generativelanguage.googleapis.com" in base_url:
+                result = call_gemini_native(prompt, api_key, base_url, model)
+            else:
+                result = call_openai_compatible(prompt, api_key, base_url, model)
+            return {
+                field: normalize_space(result.get(field)) or "摘要未说明。"
+                for field in SUMMARY_FIELDS
+            }
+        except APIRequestError as exc:
+            retryable = exc.status == 429 or 500 <= exc.status < 600
+            if not retryable or attempt == retries - 1:
+                raise
+            time.sleep(exc.retry_after or retry_base * (2**attempt))
+    raise RuntimeError("AI summary request failed")
 
 
 def paper_activity(paper: dict[str, Any]) -> dt.datetime | None:
@@ -734,6 +840,7 @@ def collect(
         paper["first_seen_at"] = (prior or {}).get("first_seen_at") or seen_at
         paper["last_seen_at"] = seen_at
         paper["chinese_summary"] = (prior or {}).get("chinese_summary") or basic_summary(paper, paper["best_match"])
+        paper["summary_engine"] = (prior or {}).get("summary_engine") or "basic"
         candidates.append(paper)
 
     new_limit = max(1, int(os.getenv("MAX_NEW_PAPERS", "50")))
@@ -778,8 +885,12 @@ def collect(
             if len(jobs) >= max_summaries:
                 break
 
+    summary_attempted = len(jobs)
+    summary_succeeded = 0
+    summary_failed = 0
+    summary_last_error = ""
     if jobs:
-        concurrency = max(1, int(os.getenv("LLM_CONCURRENCY", "2")))
+        concurrency = max(1, int(os.getenv("LLM_CONCURRENCY", "1")))
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
             futures = {
                 executor.submit(summarize_with_ai, topic, paper): index
@@ -789,9 +900,15 @@ def collect(
                 try:
                     papers[index]["chinese_summary"] = future.result()
                     papers[index]["summary_engine"] = "ai"
+                    summary_succeeded += 1
                 except Exception as exc:
                     print(f"Warning: AI summary failed for {papers[index].get('id')}: {exc}", file=sys.stderr)
                     papers[index]["summary_engine"] = "basic"
+                    summary_failed += 1
+                    summary_last_error = normalize_space(str(exc))[:240]
+
+    ai_summary_count = sum(1 for paper in papers if paper.get("summary_engine") == "ai")
+    basic_summary_count = len(papers) - ai_summary_count
 
     topic_payload = [dataclasses.asdict(topic) for topic in topics]
     payload = {
@@ -804,6 +921,12 @@ def collect(
         "stats": {
             "collection_mode": "fresh" if clear_cache or not previous_papers else "incremental",
             "ai_summary_enabled": ai_enabled(),
+            "ai_summary_count": ai_summary_count,
+            "basic_summary_count": basic_summary_count,
+            "ai_summary_attempted": summary_attempted,
+            "ai_summary_succeeded": summary_succeeded,
+            "ai_summary_failed": summary_failed,
+            "ai_summary_last_error": summary_last_error,
             "paper_count": len(papers),
             "new_or_refreshed_count": len(candidates),
             "source_stats": source_stats,

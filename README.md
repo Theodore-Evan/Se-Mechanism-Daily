@@ -48,7 +48,7 @@ GitHub Pages 静态网站
    | Secret | `LLM_API_KEY` | 启用 Gemini 中文摘要 |
    | Secret | `NCBI_API_KEY` | 可选，提高 PubMed API 配额 |
    | Variable | `LLM_BASE_URL` | 默认 `https://generativelanguage.googleapis.com/v1beta/openai` |
-   | Variable | `LLM_MODEL` | 默认 `gemini-2.5-flash` |
+   | Variable | `LLM_MODEL` | 默认 `gemini-2.5-flash-lite` |
    | Variable | `CONTACT_EMAIL` | 可选，提供给 Crossref、OpenAlex 或 NCBI 的 API 联系地址 |
 
 4. 在 **Actions → Update literature website → Run workflow** 手动运行一次。
@@ -120,7 +120,7 @@ python -m http.server 8000 --directory web
 export SERPAPI_API_KEY="..."
 export LLM_API_KEY="..."
 export LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
-export LLM_MODEL="gemini-2.5-flash"
+export LLM_MODEL="gemini-2.5-flash-lite"
 python scripts/collect_papers.py
 ```
 
@@ -142,14 +142,16 @@ python scripts/collect_papers.py
 | `MAX_PER_TOPIC` | `10` | 每个来源、每个方向最多读取多少条 |
 | `MAX_NEW_PAPERS` | `50` | 单次保留的新或重新发现论文上限 |
 | `MAX_STORED_PAPERS` | `50` | 网页数据最多保存多少篇 |
-| `MAX_SUMMARIES` | `20` | 单次最多生成多少篇 AI 摘要 |
+| `MAX_SUMMARIES` | `12` | 单次最多生成多少篇 AI 摘要 |
 | `MIN_MATCH_SCORE` | `0.12` | 最低相关性分数 |
 | `MIN_DAILY_PAPERS` | `8` | 结果不足时触发回填的目标数量 |
 | `DAILY_BACKFILL_DAYS` | `14` | 回填最多向前检索多少天 |
 | `RECENT_HISTORY_DAYS` | `45` | 低匹配历史论文的保留时间 |
 | `SOURCE_DELAY_SECONDS` | `1` | 外部请求之间的间隔 |
 | `PAPER_SOURCES` | 空 | 可选，用逗号临时限定来源类型 |
-| `LLM_CONCURRENCY` | `2` | Gemini 摘要并发数 |
+| `LLM_CONCURRENCY` | `1` | Gemini 摘要并发数；免费额度建议保持串行 |
+| `LLM_REQUEST_DELAY_SECONDS` | `6` | 两次 Gemini 请求之间的间隔，用于降低限流风险 |
+| `LLM_RETRIES` | `2` | Gemini 遇到限流或临时错误时的尝试次数 |
 
 ## 项目结构
 

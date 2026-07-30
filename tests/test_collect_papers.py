@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.collect_papers import (
+    APIRequestError,
     Topic,
     arxiv_query,
     attach_best_match,
@@ -18,6 +19,7 @@ from scripts.collect_papers import (
     parse_datetime,
     reconstruct_abstract,
     scholar_year,
+    summarize_with_ai,
 )
 
 
@@ -119,6 +121,77 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(paper["best_match"]["score"], 0)
 
 
+class SummaryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.topic = Topic("selenium", "硒代谢", "关注硒代谢机制", ["selenium metabolism"], [])
+        self.paper = {
+            "title": "Selenium metabolism in mammalian cells",
+            "authors": ["Researcher A"],
+            "summary": "The study measures selenium transport and selenoprotein synthesis.",
+        }
+        self.response = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps(
+                                    {
+                                        "problem": "研究硒转运。",
+                                        "method": "分析细胞代谢。",
+                                        "innovation": "摘要未说明。",
+                                        "evidence": "检测硒蛋白合成。",
+                                        "limitations": "摘要信息有限。",
+                                        "why_relevant": "直接涉及硒代谢。",
+                                    },
+                                    ensure_ascii=False,
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+
+    def test_uses_native_gemini_endpoint_and_api_key_header(self) -> None:
+        environment = {
+            "LLM_API_KEY": "test-key",
+            "LLM_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "LLM_MODEL": "gemini-2.5-flash-lite",
+            "LLM_REQUEST_DELAY_SECONDS": "0",
+            "LLM_RETRIES": "1",
+        }
+        with (
+            mock.patch.dict(os.environ, environment, clear=False),
+            mock.patch("scripts.collect_papers.request_json", return_value=self.response) as request,
+        ):
+            summary = summarize_with_ai(self.topic, self.paper)
+        self.assertEqual(summary["problem"], "研究硒转运。")
+        self.assertIn("/models/gemini-2.5-flash-lite:generateContent", request.call_args.args[0])
+        self.assertEqual(request.call_args.kwargs["headers"]["x-goog-api-key"], "test-key")
+        self.assertNotIn("test-key", request.call_args.args[0])
+
+    def test_falls_back_to_legacy_structured_output_for_http_400(self) -> None:
+        environment = {
+            "LLM_API_KEY": "test-key",
+            "LLM_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "LLM_MODEL": "gemini-2.5-flash-lite",
+            "LLM_REQUEST_DELAY_SECONDS": "0",
+            "LLM_RETRIES": "1",
+        }
+        with (
+            mock.patch.dict(os.environ, environment, clear=False),
+            mock.patch(
+                "scripts.collect_papers.request_json",
+                side_effect=[APIRequestError(400, "unsupported format"), self.response],
+            ) as request,
+        ):
+            summary = summarize_with_ai(self.topic, self.paper)
+        self.assertEqual(summary["why_relevant"], "直接涉及硒代谢。")
+        legacy_payload = json.loads(request.call_args_list[1].kwargs["data"].decode("utf-8"))
+        self.assertIn("responseSchema", legacy_payload["generationConfig"])
+
+
 class CollectionTests(unittest.TestCase):
     def test_collection_isolates_source_failure_and_writes_public_schema(self) -> None:
         config = {
@@ -169,6 +242,7 @@ class CollectionTests(unittest.TestCase):
                 )
         self.assertEqual(payload["data_kind"], "selenium_mechanism")
         self.assertEqual(payload["stats"]["paper_count"], 1)
+        self.assertEqual(payload["stats"]["basic_summary_count"], 1)
         self.assertEqual(payload["stats"]["source_stats"][1]["status"], "failed")
         self.assertNotIn("conference", json.dumps(payload).lower())
 

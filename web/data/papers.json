@@ -37,6 +37,12 @@
   "stats": {
     "collection_mode": "fresh",
     "ai_summary_enabled": false,
+    "ai_summary_count": 0,
+    "basic_summary_count": 0,
+    "ai_summary_attempted": 0,
+    "ai_summary_succeeded": 0,
+    "ai_summary_failed": 0,
+    "ai_summary_last_error": "",
     "paper_count": 0,
     "new_or_refreshed_count": 0,
     "source_stats": []

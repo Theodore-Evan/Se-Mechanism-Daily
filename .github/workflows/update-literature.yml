@@ -68,7 +68,7 @@ jobs:
           CONFIG_ISSUE_TITLE: Research Interests
           LOOKBACK_DAYS: ${{ github.event_name == 'workflow_dispatch' && inputs.lookback_days || vars.LOOKBACK_DAYS || '1' }}
           MAX_PER_TOPIC: ${{ vars.MAX_PER_TOPIC || '10' }}
-          MAX_SUMMARIES: ${{ vars.MAX_SUMMARIES || '20' }}
+          MAX_SUMMARIES: ${{ vars.MAX_SUMMARIES || '12' }}
           MAX_NEW_PAPERS: ${{ vars.MAX_NEW_PAPERS || '50' }}
           MAX_STORED_PAPERS: ${{ vars.MAX_STORED_PAPERS || '50' }}
           RECENT_HISTORY_DAYS: ${{ vars.RECENT_HISTORY_DAYS || '45' }}
@@ -84,10 +84,12 @@ jobs:
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           CLEAR_PAPER_CACHE: ${{ github.event_name == 'workflow_dispatch' && inputs.clear_cache || 'false' }}
-          LLM_CONCURRENCY: ${{ vars.LLM_CONCURRENCY || '2' }}
+          LLM_CONCURRENCY: ${{ vars.LLM_CONCURRENCY || '1' }}
+          LLM_REQUEST_DELAY_SECONDS: ${{ vars.LLM_REQUEST_DELAY_SECONDS || '6' }}
+          LLM_RETRIES: ${{ vars.LLM_RETRIES || '2' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai' }}
-          LLM_MODEL: ${{ vars.LLM_MODEL || 'gemini-2.5-flash' }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || secrets.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || secrets.LLM_MODEL || 'gemini-2.5-flash-lite' }}
         run: python scripts/collect_papers.py
 
       - name: Save paper cache
