@@ -47,9 +47,8 @@ GitHub Pages 静态网站
    | Secret | `SERPAPI_API_KEY` | 启用 Google Scholar |
    | Secret | `ZHIPU_API_KEY` | 启用智谱 GLM 中文摘要 |
    | Secret | `NCBI_API_KEY` | 可选，提高 PubMed API 配额 |
-   | Variable | `LLM_BASE_URL` | 默认 `https://open.bigmodel.cn/api/paas/v4` |
-   | Variable | `LLM_MODEL` | 默认 `glm-4-flash-250414` |
-   | Variable | `LLM_PROVIDER_NAME` | 默认 `智谱 GLM`，用于网页显示 |
+   | Variable | `ZHIPU_BASE_URL` | 可选；默认 `https://open.bigmodel.cn/api/paas/v4` |
+   | Variable | `ZHIPU_MODEL` | 可选；默认 `glm-4-flash-250414` |
    | Variable | `CONTACT_EMAIL` | 可选，提供给 Crossref、OpenAlex 或 NCBI 的 API 联系地址 |
 
 4. 在 **Actions → Update literature website → Run workflow** 手动运行一次。
@@ -61,9 +60,9 @@ GitHub Pages 静态网站
 
 API Key 只能保存在 GitHub Actions Secrets 中，不要写入代码、Issue、提交记录或网页数据。
 
-如果仓库以前使用 Gemini，请在 Actions Variables 中把旧的 `LLM_BASE_URL` 和
-`LLM_MODEL` 分别改为智谱地址与模型名；变量的优先级高于本仓库的默认值。旧的
-`LLM_API_KEY` 可以删除，也可以保留作兼容回退，但建议只使用 `ZHIPU_API_KEY`。
+如果仓库以前使用 Gemini，旧的 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`
+设置不会再被自动任务读取，可以安全删除。切换到智谱只需添加
+`ZHIPU_API_KEY`；只有使用代理地址或其他智谱模型时才需要设置两个可选变量。
 
 ## 修改研究方向
 
