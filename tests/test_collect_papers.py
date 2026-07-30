@@ -131,6 +131,18 @@ class JournalMetadataTests(unittest.TestCase):
         self.assertEqual(profile["quartile"], "Q1")
         self.assertEqual(profile["labels"], ["Nature 系列"])
 
+    def test_repository_metrics_resolve_scholar_truncation(self) -> None:
+        metrics_path = Path(__file__).resolve().parents[1] / "config" / "journal_metrics.json"
+        settings, index = load_journal_metrics(metrics_path)
+        free_radical = build_journal_profile({"journal": "Free Radical Biology …"}, settings, index)
+        chemical_engineering = build_journal_profile({"journal": "Chemical Engineering …"}, settings, index)
+        trace_elements = build_journal_profile({"journal": "Biological trace …"}, settings, index)
+        self.assertEqual(free_radical["name"], "Free Radical Biology and Medicine")
+        self.assertEqual(free_radical["impact_factor"], 8.2)
+        self.assertEqual(chemical_engineering["name"], "Chemical Engineering Journal")
+        self.assertEqual(chemical_engineering["labels"], ["Top"])
+        self.assertEqual(trace_elements["name"], "Biological Trace Element Research")
+
 
 class ScoringTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -311,6 +311,105 @@
       "quartile": "Q1"
     },
     {
+      "name": "International Journal of Molecular Sciences",
+      "aliases": ["Int J Mol Sci", "IJMS"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 5.6,
+      "quartile": "Q1",
+      "source_url": "https://www.mdpi.com/journal/ijms/stats"
+    },
+    {
+      "name": "Cells",
+      "aliases": [],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 6.0,
+      "quartile": "Q2",
+      "source_url": "https://www.mdpi.com/journal/cells"
+    },
+    {
+      "name": "Biology",
+      "aliases": [],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 4.3,
+      "quartile": "Q1",
+      "source_url": "https://www.mdpi.com/journal/biology"
+    },
+    {
+      "name": "Children",
+      "aliases": [],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 2.6,
+      "quartile": "Q1",
+      "source_url": "https://www.mdpi.com/journal/children"
+    },
+    {
+      "name": "Biological Trace Element Research",
+      "aliases": ["Biol Trace Elem Res", "Biological trace …"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 4.3,
+      "quartile": null,
+      "source_url": "https://link.springer.com/journal/12011"
+    },
+    {
+      "name": "International Journal of Peptide Research and Therapeutics",
+      "aliases": ["Int J Pept Res Ther"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 2.5,
+      "quartile": null,
+      "source_url": "https://link.springer.com/journal/10989"
+    },
+    {
+      "name": "Chemical Engineering Journal",
+      "aliases": ["Chem Eng J", "Chemical Engineering …"],
+      "family": "",
+      "tier": "top",
+      "impact_factor": 13.2,
+      "quartile": null,
+      "source_url": "https://www.sciencedirect.com/journal/chemical-engineering-journal"
+    },
+    {
+      "name": "Chemico-Biological Interactions",
+      "aliases": ["Chem Biol Interact", "Chemico-Biological …"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 5.4,
+      "quartile": null,
+      "source_url": "https://www.sciencedirect.com/journal/chemico-biological-interactions"
+    },
+    {
+      "name": "Biomass and Bioenergy",
+      "aliases": ["Biomass Bioenergy", "Biomass & Bioenergy"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 5.8,
+      "quartile": null,
+      "source_url": "https://www.sciencedirect.com/journal/biomass-and-bioenergy"
+    },
+    {
+      "name": "Bioorganic Chemistry",
+      "aliases": ["Bioorg Chem"],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 4.7,
+      "quartile": null,
+      "source_url": "https://www.sciencedirect.com/journal/bioorganic-chemistry"
+    },
+    {
+      "name": "Aquaculture",
+      "aliases": [],
+      "family": "",
+      "tier": "standard",
+      "impact_factor": 3.9,
+      "quartile": null,
+      "source_url": "https://www.sciencedirect.com/journal/aquaculture"
+    },
+    {
       "name": "Redox Biology",
       "aliases": ["Redox Biol"],
       "family": "",
@@ -320,11 +419,12 @@
     },
     {
       "name": "Free Radical Biology and Medicine",
-      "aliases": ["Free Radic Biol Med"],
+      "aliases": ["Free Radic Biol Med", "Free Radical Biology …"],
       "family": "",
       "tier": "top",
-      "impact_factor": null,
-      "quartile": "Q1"
+      "impact_factor": 8.2,
+      "quartile": "Q1",
+      "source_url": "https://www.sciencedirect.com/journal/free-radical-biology-and-medicine"
     },
     {
       "name": "Antioxidants & Redox Signaling",
