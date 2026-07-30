@@ -37,6 +37,7 @@
   "stats": {
     "collection_mode": "fresh",
     "ai_summary_enabled": false,
+    "ai_provider": "智谱 GLM",
     "ai_summary_count": 0,
     "basic_summary_count": 0,
     "ai_summary_attempted": 0,

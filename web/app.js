@@ -197,7 +197,8 @@ function renderPaper(paper) {
 
   const summaryStatus = node.querySelector(".summary-status");
   const hasAiSummary = paper.summary_engine === "ai";
-  summaryStatus.textContent = hasAiSummary ? "Gemini 摘要" : "基础摘要";
+  const provider = paper.summary_provider || state.data.stats?.ai_provider || "AI";
+  summaryStatus.textContent = hasAiSummary ? `${provider} 摘要` : "基础摘要";
   summaryStatus.classList.toggle("ai", hasAiSummary);
   setText(node, ".paper-date", `发布 ${formatDate(paper.published)} · 收录 ${formatDate(collectionTime(paper))}`);
   setText(node, ".paper-source", paper.source || "文献源");
@@ -317,10 +318,11 @@ function updateUpdatedAt(message = "") {
   const mode = stats.collection_mode === "incremental" ? "增量更新" : "重新生成";
   const aiCount = Number(stats.ai_summary_count || 0);
   const paperCount = Number(stats.paper_count || state.data.papers?.length || 0);
+  const provider = stats.ai_provider || "AI";
   const summaryMode = aiCount > 0
-    ? `Gemini 摘要 ${aiCount}/${paperCount}`
+    ? `${provider} 摘要 ${aiCount}/${paperCount}`
     : stats.ai_summary_enabled
-      ? "Gemini 摘要待生成"
+      ? `${provider} 摘要待生成`
       : "基础摘要";
   nodes.updatedAt.textContent = `更新于 ${formatDate(state.data.generated_at_iso)} · ${mode} · ${summaryMode}`;
 }

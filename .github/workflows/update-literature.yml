@@ -87,9 +87,10 @@ jobs:
           LLM_CONCURRENCY: ${{ vars.LLM_CONCURRENCY || '1' }}
           LLM_REQUEST_DELAY_SECONDS: ${{ vars.LLM_REQUEST_DELAY_SECONDS || '6' }}
           LLM_RETRIES: ${{ vars.LLM_RETRIES || '2' }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || secrets.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai' }}
-          LLM_MODEL: ${{ vars.LLM_MODEL || secrets.LLM_MODEL || 'gemini-2.5-flash-lite' }}
+          LLM_API_KEY: ${{ secrets.ZHIPU_API_KEY || secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || secrets.LLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || secrets.LLM_MODEL || 'glm-4-flash-250414' }}
+          LLM_PROVIDER_NAME: ${{ vars.LLM_PROVIDER_NAME || '智谱 GLM' }}
         run: python scripts/collect_papers.py
 
       - name: Save paper cache

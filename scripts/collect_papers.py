@@ -627,6 +627,18 @@ def ai_enabled() -> bool:
     return bool(os.getenv("LLM_API_KEY", "").strip())
 
 
+def ai_provider_name() -> str:
+    configured = os.getenv("LLM_PROVIDER_NAME", "").strip()
+    if configured:
+        return configured
+    base_url = os.getenv("LLM_BASE_URL", "").lower()
+    if "bigmodel.cn" in base_url:
+        return "智谱 GLM"
+    if "generativelanguage.googleapis.com" in base_url:
+        return "Gemini"
+    return "AI"
+
+
 SUMMARY_FIELDS = ("problem", "method", "innovation", "evidence", "limitations", "why_relevant")
 SUMMARY_SCHEMA = {
     "type": "object",
@@ -724,8 +736,8 @@ def call_openai_compatible(prompt: str, api_key: str, base_url: str, model: str)
 
 def summarize_with_ai(topic: Topic, paper: dict[str, Any]) -> dict[str, str]:
     api_key = os.getenv("LLM_API_KEY", "").strip()
-    base_url = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/")
-    model = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    base_url = os.getenv("LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4").rstrip("/")
+    model = os.getenv("LLM_MODEL", "glm-4-flash-250414")
     prompt = build_summary_prompt(topic, paper)
     request_delay = max(0.0, float(os.getenv("LLM_REQUEST_DELAY_SECONDS", "0")))
     if request_delay:
@@ -900,6 +912,7 @@ def collect(
                 try:
                     papers[index]["chinese_summary"] = future.result()
                     papers[index]["summary_engine"] = "ai"
+                    papers[index]["summary_provider"] = ai_provider_name()
                     summary_succeeded += 1
                 except Exception as exc:
                     print(f"Warning: AI summary failed for {papers[index].get('id')}: {exc}", file=sys.stderr)
@@ -921,6 +934,7 @@ def collect(
         "stats": {
             "collection_mode": "fresh" if clear_cache or not previous_papers else "incremental",
             "ai_summary_enabled": ai_enabled(),
+            "ai_provider": ai_provider_name(),
             "ai_summary_count": ai_summary_count,
             "basic_summary_count": basic_summary_count,
             "ai_summary_attempted": summary_attempted,

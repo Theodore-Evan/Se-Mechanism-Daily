@@ -13,7 +13,7 @@
 
 - 文献源：PubMed、Google Scholar（通过 SerpApi）、OpenAlex、Crossref 和生命科学 arXiv
 - 自动更新：GitHub Actions 每天运行，也支持手动触发
-- 机制摘要：可选用 Gemini 生成结构化中文摘要；未配置模型时使用保守的基础摘要
+- 机制摘要：可选用智谱 GLM 生成结构化中文摘要；未配置模型时使用保守的基础摘要
 - 研究方向配置：编辑 JSON 文件，或通过仓库中的 `Research Interests` Issue 修改
 - 静态部署：生成纯 HTML、CSS 和 JavaScript，可直接部署到 GitHub Pages
 - 隐私友好：代码中不包含维护者姓名、邮箱、账号、API Key 或固定仓库地址
@@ -27,7 +27,7 @@
       ↓
 标题与摘要关键词评分、合并重复记录
       ↓
-Gemini 中文机制摘要（可选）
+智谱 GLM 中文机制摘要（可选）
       ↓
 web/data/papers.json
       ↓
@@ -45,10 +45,11 @@ GitHub Pages 静态网站
    | 类型 | 名称 | 用途 |
    |---|---|---|
    | Secret | `SERPAPI_API_KEY` | 启用 Google Scholar |
-   | Secret | `LLM_API_KEY` | 启用 Gemini 中文摘要 |
+   | Secret | `ZHIPU_API_KEY` | 启用智谱 GLM 中文摘要 |
    | Secret | `NCBI_API_KEY` | 可选，提高 PubMed API 配额 |
-   | Variable | `LLM_BASE_URL` | 默认 `https://generativelanguage.googleapis.com/v1beta/openai` |
-   | Variable | `LLM_MODEL` | 默认 `gemini-2.5-flash-lite` |
+   | Variable | `LLM_BASE_URL` | 默认 `https://open.bigmodel.cn/api/paas/v4` |
+   | Variable | `LLM_MODEL` | 默认 `glm-4-flash-250414` |
+   | Variable | `LLM_PROVIDER_NAME` | 默认 `智谱 GLM`，用于网页显示 |
    | Variable | `CONTACT_EMAIL` | 可选，提供给 Crossref、OpenAlex 或 NCBI 的 API 联系地址 |
 
 4. 在 **Actions → Update literature website → Run workflow** 手动运行一次。
@@ -59,6 +60,10 @@ GitHub Pages 静态网站
    ```
 
 API Key 只能保存在 GitHub Actions Secrets 中，不要写入代码、Issue、提交记录或网页数据。
+
+如果仓库以前使用 Gemini，请在 Actions Variables 中把旧的 `LLM_BASE_URL` 和
+`LLM_MODEL` 分别改为智谱地址与模型名；变量的优先级高于本仓库的默认值。旧的
+`LLM_API_KEY` 可以删除，也可以保留作兼容回退，但建议只使用 `ZHIPU_API_KEY`。
 
 ## 修改研究方向
 
@@ -119,8 +124,9 @@ python -m http.server 8000 --directory web
 ```bash
 export SERPAPI_API_KEY="..."
 export LLM_API_KEY="..."
-export LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
-export LLM_MODEL="gemini-2.5-flash-lite"
+export LLM_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
+export LLM_MODEL="glm-4-flash-250414"
+export LLM_PROVIDER_NAME="智谱 GLM"
 python scripts/collect_papers.py
 ```
 
@@ -149,9 +155,9 @@ python scripts/collect_papers.py
 | `RECENT_HISTORY_DAYS` | `45` | 低匹配历史论文的保留时间 |
 | `SOURCE_DELAY_SECONDS` | `1` | 外部请求之间的间隔 |
 | `PAPER_SOURCES` | 空 | 可选，用逗号临时限定来源类型 |
-| `LLM_CONCURRENCY` | `1` | Gemini 摘要并发数；免费额度建议保持串行 |
-| `LLM_REQUEST_DELAY_SECONDS` | `6` | 两次 Gemini 请求之间的间隔，用于降低限流风险 |
-| `LLM_RETRIES` | `2` | Gemini 遇到限流或临时错误时的尝试次数 |
+| `LLM_CONCURRENCY` | `1` | 智谱摘要并发数；免费额度建议保持串行 |
+| `LLM_REQUEST_DELAY_SECONDS` | `6` | 两次模型请求之间的间隔，用于降低限流风险 |
+| `LLM_RETRIES` | `2` | 模型遇到限流或临时错误时的尝试次数 |
 
 ## 项目结构
 

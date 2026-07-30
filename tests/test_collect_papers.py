@@ -191,6 +191,47 @@ class SummaryTests(unittest.TestCase):
         legacy_payload = json.loads(request.call_args_list[1].kwargs["data"].decode("utf-8"))
         self.assertIn("responseSchema", legacy_payload["generationConfig"])
 
+    def test_uses_zhipu_openai_compatible_endpoint(self) -> None:
+        response = {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "problem": "研究硒转运。",
+                                "method": "分析细胞代谢。",
+                                "innovation": "摘要未说明。",
+                                "evidence": "检测硒蛋白合成。",
+                                "limitations": "摘要信息有限。",
+                                "why_relevant": "直接涉及硒代谢。",
+                            },
+                            ensure_ascii=False,
+                        )
+                    }
+                }
+            ]
+        }
+        environment = {
+            "LLM_API_KEY": "test-key",
+            "LLM_BASE_URL": "https://open.bigmodel.cn/api/paas/v4",
+            "LLM_MODEL": "glm-4-flash-250414",
+            "LLM_PROVIDER_NAME": "智谱 GLM",
+            "LLM_REQUEST_DELAY_SECONDS": "0",
+            "LLM_RETRIES": "1",
+        }
+        with (
+            mock.patch.dict(os.environ, environment, clear=False),
+            mock.patch("scripts.collect_papers.request_json", return_value=response) as request,
+        ):
+            summary = summarize_with_ai(self.topic, self.paper)
+        self.assertEqual(summary["problem"], "研究硒转运。")
+        self.assertEqual(
+            request.call_args.args[0],
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        )
+        request_payload = json.loads(request.call_args.kwargs["data"].decode("utf-8"))
+        self.assertEqual(request_payload["model"], "glm-4-flash-250414")
+
 
 class CollectionTests(unittest.TestCase):
     def test_collection_isolates_source_failure_and_writes_public_schema(self) -> None:
