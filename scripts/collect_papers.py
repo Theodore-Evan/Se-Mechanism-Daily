@@ -1026,9 +1026,14 @@ def collect(
     repository_config = read_json(config_path, {})
     config, config_source = issue_config(repository_config)
     runtime = apply_runtime_config(config)
-    lookback_days = runtime["lookback_days"]
-    max_per_topic = runtime["max_per_topic"]
-    max_summaries = runtime["max_summaries"]
+    configured_runtime = config.get("runtime") or {}
+    if "lookback_days" in configured_runtime and os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch":
+        lookback_days = runtime["lookback_days"]
+    if "max_per_topic" in configured_runtime:
+        max_per_topic = runtime["max_per_topic"]
+    if "max_summaries" in configured_runtime:
+        max_summaries = runtime["max_summaries"]
+    runtime.update(lookback_days=lookback_days, max_per_topic=max_per_topic, max_summaries=max_summaries)
     sources, topics = parse_config(config)
     journal_settings, journal_index = load_journal_metrics(journal_metrics_path)
     allowed_sources = {
