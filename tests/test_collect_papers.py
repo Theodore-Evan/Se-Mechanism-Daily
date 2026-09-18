@@ -10,6 +10,7 @@ from unittest import mock
 from scripts.collect_papers import (
     APIRequestError,
     Topic,
+    apply_runtime_config,
     arxiv_query,
     attach_best_match,
     build_journal_profile,
@@ -17,10 +18,12 @@ from scripts.collect_papers import (
     collect,
     deduplicate,
     inferred_journal_group,
+    issue_config,
     load_journal_metrics,
     parse_config,
     parse_datetime,
     reconstruct_abstract,
+    runtime_config,
     scholar_journal,
     scholar_year,
     summarize_with_ai,
@@ -57,6 +60,68 @@ class ConfigurationTests(unittest.TestCase):
             query = arxiv_query(topic)
         self.assertIn('all:"selenium ferroptosis"', query)
         self.assertNotIn("cat:q-bio.BM", query)
+
+    def test_runtime_config_validates_frontend_settings(self) -> None:
+        settings = runtime_config(
+            {
+                "runtime": {
+                    "provider": "gemini",
+                    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                    "model": "gemini-test",
+                    "lookback_days": 12,
+                    "max_new_papers": 70,
+                    "max_stored_papers": 600,
+                    "min_match_score": 0.2,
+                }
+            }
+        )
+        self.assertEqual(settings["provider"], "gemini")
+        self.assertEqual(settings["base_url"], "https://generativelanguage.googleapis.com/v1beta/openai")
+        self.assertEqual(settings["secret_name"], "GEMINI_API_KEY")
+        self.assertEqual(settings["lookback_days"], 12)
+        self.assertEqual(settings["max_new_papers"], 70)
+        self.assertEqual(settings["max_stored_papers"], 600)
+
+    def test_runtime_config_never_reads_secret_from_public_json(self) -> None:
+        config = {
+            "runtime": {
+                "provider": "custom",
+                "base_url": "https://api.example.com/v1",
+                "model": "example-model",
+                "api_key": "must-not-be-used",
+            }
+        }
+        with mock.patch.dict(os.environ, {"CUSTOM_LLM_API_KEY": "safe-secret"}, clear=True):
+            settings = apply_runtime_config(config)
+            self.assertEqual(os.environ["LLM_API_KEY"], "safe-secret")
+        self.assertNotIn("api_key", settings)
+        self.assertTrue(settings["secret_configured"])
+
+    def test_issue_runtime_config_is_accepted_only_from_repository_owner(self) -> None:
+        repository = {
+            "sources": [{"type": "pubmed", "name": "PubMed"}],
+            "topics": [{"id": "base", "name": "Base", "keywords": ["selenium"]}],
+        }
+        malicious = {
+            "sources": [{"type": "pubmed", "name": "PubMed"}],
+            "topics": [{"id": "evil", "name": "Evil", "keywords": ["selenium"]}],
+            "runtime": {"provider": "custom", "base_url": "https://evil.example/v1", "model": "steal"},
+        }
+        trusted = {
+            "sources": [{"type": "pubmed", "name": "PubMed"}],
+            "topics": [{"id": "trusted", "name": "Trusted", "keywords": ["selenoprotein"]}],
+        }
+        issues = [
+            {"number": 2, "title": "Research Interests", "user": {"login": "attacker"}, "body": f"```json\n{json.dumps(malicious)}\n```"},
+            {"number": 1, "title": "Research Interests", "user": {"login": "Theodore-Evan"}, "body": f"```json\n{json.dumps(trusted)}\n```"},
+        ]
+        with (
+            mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "Theodore-Evan/Se-Mechanism-Daily", "GITHUB_TOKEN": "token"}, clear=False),
+            mock.patch("scripts.collect_papers.request_json", return_value=issues),
+        ):
+            selected, source = issue_config(repository)
+        self.assertEqual(selected["topics"][0]["id"], "trusted")
+        self.assertEqual(source, "issue #1")
 
 
 class NormalizationTests(unittest.TestCase):

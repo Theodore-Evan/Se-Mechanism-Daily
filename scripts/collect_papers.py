@@ -38,6 +38,39 @@ CROSSREF_API = "https://api.crossref.org/works"
 SERPAPI_API = "https://serpapi.com/search.json"
 UTC = dt.timezone.utc
 
+PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
+    "zhipu": {
+        "name": "智谱 GLM",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4-flash-250414",
+        "secret_name": "ZHIPU_API_KEY",
+    },
+    "gemini": {
+        "name": "Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "model": "gemini-2.5-flash",
+        "secret_name": "GEMINI_API_KEY",
+    },
+    "openai": {
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "secret_name": "OPENAI_API_KEY",
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-chat",
+        "secret_name": "DEEPSEEK_API_KEY",
+    },
+    "custom": {
+        "name": "自定义 API",
+        "base_url": "",
+        "model": "",
+        "secret_name": "CUSTOM_LLM_API_KEY",
+    },
+}
+
 
 @dataclasses.dataclass(frozen=True)
 class Topic:
@@ -320,6 +353,67 @@ def parse_config(data: dict[str, Any]) -> tuple[list[Source], list[Topic]]:
     return sources, topics
 
 
+def runtime_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate public, non-secret runtime settings from repository or Issue JSON."""
+    raw = data.get("runtime") if isinstance(data.get("runtime"), dict) else {}
+    provider = str(raw.get("provider") or os.getenv("LLM_PROVIDER_ID") or "zhipu").strip().lower()
+    if provider not in PROVIDER_DEFAULTS:
+        provider = "custom"
+    defaults = PROVIDER_DEFAULTS[provider]
+    environment_matches = provider == os.getenv("LLM_PROVIDER_ID", "zhipu")
+    base_url = str(raw.get("base_url") or (os.getenv("LLM_BASE_URL") if environment_matches else "") or defaults["base_url"]).strip().rstrip("/")
+    if base_url and not base_url.startswith("https://"):
+        raise ValueError("runtime.base_url 必须使用 https://")
+    model = str(raw.get("model") or (os.getenv("LLM_MODEL") if environment_matches else "") or defaults["model"]).strip()
+    provider_name = str(raw.get("provider_name") or defaults["name"]).strip() or defaults["name"]
+
+    def bounded_int(key: str, fallback: int, minimum: int, maximum: int) -> int:
+        try:
+            value = int(raw.get(key, fallback))
+        except (TypeError, ValueError):
+            value = fallback
+        return min(max(value, minimum), maximum)
+
+    try:
+        minimum_score = float(raw.get("min_match_score", os.getenv("MIN_MATCH_SCORE", "0.12")))
+    except (TypeError, ValueError):
+        minimum_score = 0.12
+
+    return {
+        "provider": provider,
+        "provider_name": provider_name,
+        "base_url": base_url,
+        "model": model,
+        "secret_name": defaults["secret_name"],
+        "lookback_days": bounded_int("lookback_days", int(os.getenv("LOOKBACK_DAYS", "7")), 1, 90),
+        "max_per_topic": bounded_int("max_per_topic", int(os.getenv("MAX_PER_TOPIC", "10")), 1, 50),
+        "max_summaries": bounded_int("max_summaries", int(os.getenv("MAX_SUMMARIES", "12")), 0, 100),
+        "max_new_papers": bounded_int("max_new_papers", int(os.getenv("MAX_NEW_PAPERS", "50")), 1, 200),
+        "max_stored_papers": bounded_int("max_stored_papers", int(os.getenv("MAX_STORED_PAPERS", "500")), 10, 2000),
+        "min_match_score": min(max(minimum_score, 0.0), 1.0),
+    }
+
+
+def apply_runtime_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply validated runtime settings without ever accepting a secret value from public JSON."""
+    runtime = runtime_config(data)
+    os.environ["LLM_PROVIDER_ID"] = runtime["provider"]
+    os.environ["LLM_PROVIDER_NAME"] = runtime["provider_name"]
+    os.environ["LLM_BASE_URL"] = runtime["base_url"]
+    os.environ["LLM_MODEL"] = runtime["model"]
+    os.environ["MAX_NEW_PAPERS"] = str(runtime["max_new_papers"])
+    os.environ["MAX_STORED_PAPERS"] = str(runtime["max_stored_papers"])
+    os.environ["MIN_MATCH_SCORE"] = str(runtime["min_match_score"])
+
+    secret_name = runtime["secret_name"]
+    selected_key = os.getenv(secret_name, "").strip()
+    if not selected_key and runtime["provider"] == "zhipu":
+        selected_key = os.getenv("LLM_API_KEY", "").strip()
+    os.environ["LLM_API_KEY"] = selected_key
+    runtime["secret_configured"] = bool(selected_key)
+    return runtime
+
+
 def issue_config(repository_config: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Use the JSON block in a matching GitHub issue when one is available."""
     repository = os.getenv("GITHUB_REPOSITORY", "").strip()
@@ -327,7 +421,8 @@ def issue_config(repository_config: dict[str, Any]) -> tuple[dict[str, Any], str
     issue_title = os.getenv("CONFIG_ISSUE_TITLE", "Research Interests").strip()
     if not repository or not token:
         return repository_config, "repository"
-    url = f"https://api.github.com/repos/{repository}/issues?state=open&per_page=100"
+    repository_owner = repository.split("/", 1)[0].strip().casefold()
+    url = f"https://api.github.com/repos/{repository}/issues?state=open&per_page=100&sort=updated&direction=desc"
     try:
         issues = request_json(
             url,
@@ -343,12 +438,17 @@ def issue_config(repository_config: dict[str, Any]) -> tuple[dict[str, Any], str
     for issue in issues if isinstance(issues, list) else []:
         if str(issue.get("title", "")).strip() != issue_title:
             continue
+        issue_author = str((issue.get("user") or {}).get("login", "")).strip().casefold()
+        if not issue_author or issue_author != repository_owner:
+            print(f"Warning: ignoring configuration issue from non-owner {issue_author or 'unknown'}", file=sys.stderr)
+            continue
         match = re.search(r"```json\s*(\{.*?\})\s*```", str(issue.get("body", "")), flags=re.DOTALL)
         if not match:
             continue
         try:
             candidate = json.loads(match.group(1))
             parse_config(candidate)
+            runtime_config(candidate)
             return candidate, f"issue #{issue.get('number')}"
         except (json.JSONDecodeError, ValueError) as exc:
             print(f"Warning: invalid JSON in configuration issue: {exc}", file=sys.stderr)
@@ -925,6 +1025,10 @@ def collect(
     now = utc_now()
     repository_config = read_json(config_path, {})
     config, config_source = issue_config(repository_config)
+    runtime = apply_runtime_config(config)
+    lookback_days = runtime["lookback_days"]
+    max_per_topic = runtime["max_per_topic"]
+    max_summaries = runtime["max_summaries"]
     sources, topics = parse_config(config)
     journal_settings, journal_index = load_journal_metrics(journal_metrics_path)
     allowed_sources = {
@@ -994,6 +1098,8 @@ def collect(
             paper = merge_paper(prior, paper)
         paper["first_seen_at"] = (prior or {}).get("first_seen_at") or seen_at
         paper["last_seen_at"] = seen_at
+        prior_dates = (prior or {}).get("collection_dates", [])
+        paper["collection_dates"] = sorted(set([*prior_dates, seen_at[:10], paper["first_seen_at"][:10]]))
         paper["chinese_summary"] = (prior or {}).get("chinese_summary") or basic_summary(paper, paper["best_match"])
         paper["summary_engine"] = (prior or {}).get("summary_engine") or "basic"
         candidates.append(paper)
@@ -1069,12 +1175,15 @@ def collect(
     basic_summary_count = len(papers) - ai_summary_count
 
     topic_payload = [dataclasses.asdict(topic) for topic in topics]
+    source_payload = [dataclasses.asdict(source) for source in sources]
     payload = {
         "generated_at": email.utils.format_datetime(now),
         "generated_at_iso": now.isoformat(),
         "config_source": config_source,
         "data_kind": "selenium_mechanism",
+        "sources": source_payload,
         "topics": topic_payload,
+        "runtime": runtime,
         "papers": papers,
         "stats": {
             "collection_mode": "fresh" if clear_cache or not previous_papers else "incremental",

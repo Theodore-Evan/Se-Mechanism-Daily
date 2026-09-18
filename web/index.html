@@ -4,168 +4,117 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Se Mechanism Daily</title>
-    <meta
-      name="description"
-      content="自动追踪硒代谢、硒蛋白、氧化还原、铁死亡、免疫炎症及硒相关疾病机制研究。"
-    />
-    <link rel="stylesheet" href="./styles.css?v=20260730-journals" />
+    <meta name="description" content="自动追踪硒代谢、硒蛋白、氧化还原、铁死亡、免疫炎症及硒相关疾病机制研究。" />
+    <link rel="stylesheet" href="./styles.css?v=20260917-codex" />
   </head>
-  <body>
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">Se</span>
-        <div>
-          <h1>Se Mechanism Daily</h1>
-          <p id="updatedAt">正在读取文献数据</p>
+  <body data-theme="dark">
+    <div class="app-layout">
+      <aside class="sidebar" id="sidebar" aria-label="抓取历史">
+        <div class="sidebar-brand">
+          <span class="brand-mark">Se</span>
+          <div><strong>Mechanism Daily</strong><span>Research workspace</span></div>
         </div>
-      </div>
-      <nav class="top-actions" aria-label="页面操作">
-        <div class="theme-switcher" role="radiogroup" aria-label="选择网页主题">
-          <button class="theme-option" type="button" role="radio" aria-checked="true" data-theme-option="dark">
-            <span class="theme-swatch dark-swatch"></span><span>深色</span>
-          </button>
-          <button class="theme-option" type="button" role="radio" aria-checked="false" data-theme-option="light">
-            <span class="theme-swatch light-swatch"></span><span>浅色</span>
-          </button>
-          <button class="theme-option" type="button" role="radio" aria-checked="false" data-theme-option="eye">
-            <span class="theme-swatch eye-swatch"></span><span>护眼</span>
-          </button>
-        </div>
-        <a class="icon-link" id="configureLink" href="#" target="_blank" rel="noreferrer" title="配置研究方向">⚙</a>
-        <button class="icon-link" id="dataActionsButton" type="button" title="刷新或清空后重抓文献" aria-label="刷新或清空后重抓文献">↻</button>
-        <a class="icon-link" id="actionsLink" href="#" target="_blank" rel="noreferrer" title="查看更新任务">↗</a>
-      </nav>
-    </header>
+        <button class="primary-action" id="openSettingsButton" type="button"><span class="button-icon">＋</span><span>配置抓取与 API</span></button>
+        <nav class="sidebar-nav" aria-label="文献视图">
+          <button class="nav-item" type="button" data-view="all"><span class="nav-icon">⌂</span><span>全部文献</span><span class="nav-count" id="allCount">0</span></button>
+          <button class="nav-item" type="button" data-view="highlights"><span class="nav-icon">✦</span><span>本周精选</span><span class="nav-count" id="highlightCount">0</span></button>
+        </nav>
+        <div class="history-heading"><span>抓取日期</span><span id="dateCount">0 天</span></div>
+        <nav class="date-navigation" id="dateNavigation" aria-label="按抓取日期查看"></nav>
+        <div class="sidebar-footer"><span class="status-dot"></span><span id="configSource">读取配置中</span></div>
+      </aside>
 
-    <main class="shell">
-      <section class="overview" aria-label="文献概览">
-        <div class="overview-title">
-          <p>Mechanism Radar</p>
-          <h2 id="viewTitle">硒相关机制研究</h2>
-        </div>
-        <div class="metric-grid">
-          <div class="metric"><span class="metric-value" id="paperCount">0</span><span class="metric-label">总论文</span></div>
-          <div class="metric"><span class="metric-value" id="weekCount">0</span><span class="metric-label">本周新增</span></div>
-          <div class="metric"><span class="metric-value" id="monthCount">0</span><span class="metric-label">本月新增</span></div>
-          <div class="metric accent"><span class="metric-value" id="topScore">0.00</span><span class="metric-label">最高匹配</span></div>
-        </div>
-      </section>
+      <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-      <section class="toolbar" aria-label="筛选论文">
-        <div class="tabs" role="tablist" aria-label="时间范围">
-          <button class="tab" type="button" data-view="all">全部</button>
-          <button class="tab active" type="button" data-view="daily">当日</button>
-          <button class="tab" type="button" data-view="week">本周</button>
-          <button class="tab" type="button" data-view="month">本月</button>
-          <button class="tab" type="button" data-view="highlights">本周精选</button>
-        </div>
-        <div class="filters">
-          <label class="field compact"><span>日期</span><select id="dateFilter"></select></label>
-          <label class="field"><span>方向</span><select id="topicFilter"></select></label>
-          <label class="field">
-            <span>匹配</span>
-            <select id="levelFilter">
-              <option value="all">全部</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </label>
-          <label class="field journal-filter">
-            <span>期刊</span>
-            <select id="journalFilter">
-              <option value="all">全部期刊</option>
-              <option value="cns">CNS 主刊</option>
-              <option value="nature">Nature 系列</option>
-              <option value="science">Science 系列</option>
-              <option value="cell">Cell 系列</option>
-              <option value="top">其他 Top 期刊</option>
-              <option value="q1">JCR Q1</option>
-              <option value="q2">JCR Q2</option>
-              <option value="q3">JCR Q3</option>
-              <option value="q4">JCR Q4</option>
-              <option value="unconfigured">指标待配置</option>
-            </select>
-          </label>
-          <label class="field search">
-            <span>搜索</span>
-            <input id="searchInput" type="search" placeholder="标题、作者、关键词" />
-          </label>
-        </div>
-      </section>
+      <main class="workspace">
+        <header class="workspace-header">
+          <button class="icon-button mobile-only" id="sidebarToggle" type="button" aria-label="打开日期侧栏">☰</button>
+          <div class="workspace-title"><h1 id="viewTitle">今日文献</h1><p id="updatedAt">正在读取文献数据</p></div>
+          <div class="header-actions">
+            <button class="text-button" id="themeButton" type="button" title="切换主题">◐ <span>主题</span></button>
+            <button class="text-button" id="dataActionsButton" type="button">↻ <span>运行抓取</span></button>
+            <button class="text-button emphasis" id="headerSettingsButton" type="button">⚙ <span>配置</span></button>
+          </div>
+        </header>
 
-      <section class="content">
-        <div class="content-head">
-          <div><h2 id="listTitle">当日论文</h2><p id="scopeLabel">-</p></div>
-          <span id="resultCount">0 篇</span>
-        </div>
-        <div id="paperList" class="paper-list"></div>
-      </section>
-    </main>
+        <section class="status-strip" aria-label="文献概览">
+          <div><span class="metric-value" id="paperCount">0</span><span class="metric-label">全部收录</span></div>
+          <div><span class="metric-value" id="selectedCount">0</span><span class="metric-label">当前视图</span></div>
+          <div><span class="metric-value" id="aiCount">0</span><span class="metric-label">AI 摘要</span></div>
+          <div><span class="metric-value" id="topScore">0.00</span><span class="metric-label">最高匹配</span></div>
+        </section>
 
-    <dialog class="data-dialog" id="dataActionsDialog" aria-labelledby="dataActionsTitle">
-      <div class="dialog-head">
-        <div>
-          <p>Literature Update</p>
-          <h2 id="dataActionsTitle">更新文献数据</h2>
+        <section class="toolbar" aria-label="筛选论文">
+          <label class="field"><span>方向</span><select id="topicFilter"><option value="all">全部方向</option></select></label>
+          <label class="field compact"><span>匹配</span><select id="levelFilter"><option value="all">全部</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label class="field journal-filter"><span>期刊</span><select id="journalFilter"><option value="all">全部期刊</option><option value="cns">CNS 主刊</option><option value="nature">Nature 系列</option><option value="science">Science 系列</option><option value="cell">Cell 系列</option><option value="top">其他 Top</option><option value="q1">JCR Q1</option><option value="q2">JCR Q2</option><option value="q3">JCR Q3</option><option value="q4">JCR Q4</option><option value="unconfigured">指标待配置</option></select></label>
+          <label class="field search-field"><span>搜索</span><input id="searchInput" type="search" placeholder="搜索标题、作者、关键词或摘要" /></label>
+        </section>
+
+        <section class="content">
+          <div class="content-head"><div><h2 id="listTitle">今日抓取</h2><p id="scopeLabel">-</p></div><span id="resultCount">0 篇</span></div>
+          <div id="paperList" class="paper-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+      <form method="dialog" class="settings-panel" id="settingsForm">
+        <header class="dialog-header">
+          <div><span class="eyebrow">ADMIN CONFIGURATION</span><h2 id="settingsTitle">抓取与 API 设置</h2><p>公开页面只保存非敏感配置；API Key 始终留在 GitHub Secrets。</p></div>
+          <button class="icon-button" id="settingsClose" type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="settings-body">
+          <section class="settings-section">
+            <div class="section-heading"><div><h3>AI 摘要接口</h3><p>切换兼容接口、模型与对应的 Secret。</p></div><span class="safe-badge">不公开 Key</span></div>
+            <div class="form-grid two-columns">
+              <label class="field"><span>提供商</span><select id="providerSelect"><option value="zhipu">智谱 GLM</option><option value="gemini">Gemini</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义兼容接口</option></select></label>
+              <label class="field"><span>模型</span><input id="modelInput" autocomplete="off" /></label>
+              <label class="field full-width"><span>API Base URL</span><input id="baseUrlInput" type="url" autocomplete="off" placeholder="https://.../v1" /></label>
+            </div>
+            <div class="secret-card"><div><strong id="secretName">ZHIPU_API_KEY</strong><span id="secretStatus">密钥状态将在刷新后显示</span></div><a class="secondary-button" id="secretsLink" href="#" target="_blank" rel="noreferrer">打开 GitHub Secrets ↗</a></div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-heading"><div><h3>抓取范围</h3><p>选择数据源，并控制每次检索与摘要数量。</p></div></div>
+            <div class="source-grid" id="sourceEditor"></div>
+            <div class="form-grid four-columns">
+              <label class="field"><span>回溯天数</span><input id="lookbackInput" type="number" min="1" max="90" /></label>
+              <label class="field"><span>每方向上限</span><input id="maxPerTopicInput" type="number" min="1" max="50" /></label>
+              <label class="field"><span>AI 摘要上限</span><input id="maxSummariesInput" type="number" min="0" max="100" /></label>
+              <label class="field"><span>历史保存上限</span><input id="maxPapersInput" type="number" min="10" max="2000" /></label>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-heading"><div><h3>研究方向与抓取关键词</h3><p>每行一个英文检索词；描述会提供给 AI 摘要模型。</p></div><button class="secondary-button" id="addTopicButton" type="button">＋ 添加方向</button></div>
+            <div class="topic-editor" id="topicEditor"></div>
+          </section>
         </div>
-        <button class="dialog-close" id="dataActionsClose" type="button" aria-label="关闭">×</button>
-      </div>
-      <p class="dialog-intro">
-        网页不会保存 GitHub 权限或访问令牌。选择操作后会进入仓库的 Actions 页面，再点击
-        <strong>Run workflow</strong> 即可安全执行。
-      </p>
-      <div class="dialog-actions">
-        <a class="workflow-action refresh-action" id="refreshPapersLink" href="#" target="_blank" rel="noreferrer">
-          <span class="workflow-icon">↻</span>
-          <span><strong>刷新重新抓取</strong><small>保留历史缓存，抓取最新文献并补齐期刊信息；clear_cache 保持关闭。</small></span>
-        </a>
-        <a class="workflow-action clear-action" id="clearPapersLink" href="#" target="_blank" rel="noreferrer">
-          <span class="workflow-icon">⌫</span>
-          <span><strong>清空后重抓</strong><small>忽略已有文献缓存，从数据源重新建立列表；运行时打开 clear_cache。</small></span>
-        </a>
-      </div>
-      <p class="dialog-note">清空后重抓不会删除仓库代码，但会替换下一次发布的文献列表。</p>
+        <footer class="dialog-footer">
+          <div class="dialog-footer-note" id="settingsMessage">修改先保存在本浏览器，提交后由 GitHub Actions 应用。</div>
+          <div class="dialog-footer-actions"><button class="secondary-button" id="copyConfigButton" type="button">复制 JSON</button><button class="secondary-button" id="saveDraftButton" type="button">保存草稿</button><button class="primary-button" id="applyConfigButton" type="button">应用配置并抓取 ↗</button></div>
+        </footer>
+      </form>
     </dialog>
 
+    <dialog class="data-dialog" id="dataActionsDialog" aria-labelledby="dataActionsTitle">
+      <div class="compact-dialog">
+        <header class="dialog-header"><div><span class="eyebrow">GITHUB ACTIONS</span><h2 id="dataActionsTitle">运行文献抓取</h2><p>进入已登录的 GitHub 后确认运行，网页不会接触你的令牌。</p></div><button class="icon-button" id="dataActionsClose" type="button" aria-label="关闭">×</button></header>
+        <div class="run-options"><a class="run-option" id="refreshPapersLink" href="#" target="_blank" rel="noreferrer"><span>↻</span><div><strong>增量刷新</strong><small>保留历史数据，抓取最新文献。</small></div></a><a class="run-option danger" id="clearPapersLink" href="#" target="_blank" rel="noreferrer"><span>⌫</span><div><strong>清空后重抓</strong><small>在 Run workflow 中打开 clear_cache。</small></div></a></div>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <template id="paperTemplate">
-      <article class="paper-card">
-        <div class="paper-main">
-          <div class="paper-meta">
-            <span class="match-badge"></span>
-            <span class="summary-status"></span>
-            <span class="paper-date"></span>
-            <span class="paper-source"></span>
-          </div>
-          <h3 class="paper-title"></h3>
-          <p class="paper-authors"></p>
-          <div class="journal-meta">
-            <span class="journal-name"></span>
-            <span class="journal-impact"></span>
-            <span class="journal-quartile"></span>
-            <span class="journal-tier"></span>
-          </div>
-          <div class="paper-tags"></div>
-          <dl class="summary-grid">
-            <div><dt>问题</dt><dd class="summary-problem"></dd></div>
-            <div><dt>方法</dt><dd class="summary-method"></dd></div>
-            <div><dt>创新</dt><dd class="summary-innovation"></dd></div>
-            <div><dt>证据</dt><dd class="summary-evidence"></dd></div>
-            <div><dt>局限</dt><dd class="summary-limitations"></dd></div>
-            <div><dt>相关性</dt><dd class="summary-relevant"></dd></div>
-          </dl>
-        </div>
-        <footer class="paper-footer">
-          <span class="match-reason"></span>
-          <div class="paper-links">
-            <a class="paper-link abs-link" target="_blank" rel="noreferrer">原文</a>
-            <a class="paper-link pdf-link" target="_blank" rel="noreferrer">PDF</a>
-            <a class="paper-link download-link" target="_blank" rel="noreferrer">下载 PDF</a>
-          </div>
-        </footer>
-      </article>
+      <article class="paper-card"><div class="paper-main"><div class="paper-meta"><span class="match-badge"></span><span class="summary-status"></span><span class="paper-date"></span><span class="paper-source"></span></div><h3 class="paper-title"></h3><p class="paper-authors"></p><div class="journal-meta"><span class="journal-name"></span><span class="journal-impact"></span><span class="journal-quartile"></span><span class="journal-tier"></span></div><div class="paper-tags"></div><dl class="summary-grid"><div><dt>问题</dt><dd class="summary-problem"></dd></div><div><dt>方法</dt><dd class="summary-method"></dd></div><div><dt>创新</dt><dd class="summary-innovation"></dd></div><div><dt>证据</dt><dd class="summary-evidence"></dd></div><div><dt>局限</dt><dd class="summary-limitations"></dd></div><div><dt>相关性</dt><dd class="summary-relevant"></dd></div></dl></div><footer class="paper-footer"><span class="match-reason"></span><div class="paper-links"><a class="paper-link abs-link" target="_blank" rel="noreferrer">原文</a><a class="paper-link pdf-link" target="_blank" rel="noreferrer">PDF</a><a class="paper-link download-link" target="_blank" rel="noreferrer">下载</a></div></footer></article>
     </template>
 
-    <script src="./app.js?v=20260730-journals"></script>
+    <template id="topicEditorTemplate">
+      <article class="topic-config-card"><div class="topic-config-head"><span class="topic-number"></span><button class="remove-topic" type="button" aria-label="删除方向">删除</button></div><div class="form-grid two-columns"><label class="field"><span>方向名称</span><input class="topic-name" /></label><label class="field"><span>稳定 ID</span><input class="topic-id" /></label><label class="field full-width"><span>方向说明</span><textarea class="topic-description" rows="2"></textarea></label><label class="field full-width"><span>关键词（每行一个）</span><textarea class="topic-keywords" rows="5"></textarea></label></div></article>
+    </template>
+
+    <script src="./app.js?v=20260917-codex"></script>
   </body>
 </html>

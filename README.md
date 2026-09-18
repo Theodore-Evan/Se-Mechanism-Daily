@@ -49,6 +49,10 @@ GitHub Pages 静态网站
    |---|---|---|
    | Secret | `SERPAPI_API_KEY` | 启用 Google Scholar |
    | Secret | `ZHIPU_API_KEY` | 启用智谱 GLM 中文摘要 |
+   | Secret | `GEMINI_API_KEY` | 切换到 Gemini 时使用 |
+   | Secret | `OPENAI_API_KEY` | 切换到 OpenAI 时使用 |
+   | Secret | `DEEPSEEK_API_KEY` | 切换到 DeepSeek 时使用 |
+   | Secret | `CUSTOM_LLM_API_KEY` | 自定义 OpenAI 兼容接口时使用 |
    | Secret | `NCBI_API_KEY` | 可选，提高 PubMed API 配额 |
    | Variable | `ZHIPU_BASE_URL` | 可选；默认 `https://open.bigmodel.cn/api/paas/v4` |
    | Variable | `ZHIPU_MODEL` | 可选；默认 `glm-4-flash-250414` |
@@ -63,9 +67,28 @@ GitHub Pages 静态网站
 
 API Key 只能保存在 GitHub Actions Secrets 中，不要写入代码、Issue、提交记录或网页数据。
 
-如果仓库以前使用 Gemini，旧的 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`
-设置不会再被自动任务读取，可以安全删除。切换到智谱只需添加
-`ZHIPU_API_KEY`；只有使用代理地址或其他智谱模型时才需要设置两个可选变量。
+前端配置面板可以切换智谱、Gemini、OpenAI、DeepSeek 或自定义 OpenAI 兼容接口。
+模型与 Base URL 会写进 `Research Interests` Issue；采集器根据提供商选择上表对应的
+Secret。Secret 的值不会进入 Issue、网页数据或提交记录。
+
+## 网页配置抓取与 API
+
+网站采用 Codex 风格工作区：左栏按 `collection_dates` 记录每日抓取结果；旧数据缺少完整抓取记录时，使用 `first_seen_at`（首次抓取日期）展示，
+中间展示当天论文，右上角的 **配置** 打开管理面板。面板支持：
+
+- 勾选 PubMed、Google Scholar、OpenAlex、Crossref 和 arXiv；
+- 编辑研究方向、方向说明和逐行关键词；
+- 切换 AI 提供商、Base URL 与模型；
+- 调整回溯天数、每方向上限、摘要上限和论文保存上限；
+- 保存仅对当前浏览器可见的草稿，或复制完整 JSON；
+- 点击“应用配置并抓取”生成 `Research Interests` Issue。
+
+较长的配置会复制到剪贴板，请在新 Issue 正文中粘贴并提交。多个同名配置 Issue 以最近更新的有效所有者配置为准。历史列表受保存上限限制（默认 500 篇），此前已被清理的历史无法自动恢复。
+
+仓库所有者创建或编辑该 Issue 后，GitHub Actions 会自动读取其中的 JSON 并重新抓取；
+其他账号创建的同名 Issue 会被工作流与采集器同时忽略。因为网站是
+公开的 GitHub Pages，API Key 不能由页面保存；配置面板会显示当前所需的 Secret 名称，
+并提供仓库 Secrets 设置入口。这个设计让查询参数前端化，同时不把密钥发送给访客。
 
 ## 修改研究方向
 

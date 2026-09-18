@@ -6,6 +6,18 @@
     { "type": "crossref", "name": "Crossref" },
     { "type": "arxiv", "name": "arXiv" }
   ],
+  "runtime": {
+    "provider": "zhipu",
+    "provider_name": "智谱 GLM",
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "model": "glm-4-flash-250414",
+    "lookback_days": 7,
+    "max_per_topic": 10,
+    "max_summaries": 12,
+    "max_new_papers": 50,
+    "max_stored_papers": 500,
+    "min_match_score": 0.12
+  },
   "topics": [
     {
       "id": "selenium_metabolism_selenoproteins",
