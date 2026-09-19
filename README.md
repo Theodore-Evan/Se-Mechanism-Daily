@@ -19,6 +19,7 @@
 - 机制摘要：可选用智谱 GLM 生成结构化中文摘要；未配置模型时使用保守的基础摘要
 - 研究方向配置：编辑 JSON 文件，或通过仓库中的 `Research Interests` Issue 修改
 - 静态部署：生成纯 HTML、CSS 和 JavaScript，可直接部署到 GitHub Pages
+- 多用户模式：可接入 Supabase Auth 与 Postgres；每个账号拥有独立设置、密钥、日期历史和论文库
 - 隐私友好：代码中不包含维护者姓名、邮箱、账号、API Key 或固定仓库地址
 
 ## 工作流程
@@ -70,6 +71,41 @@ API Key 只能保存在 GitHub Actions Secrets 中，不要写入代码、Issue�
 前端配置面板可以切换智谱、Gemini、OpenAI、DeepSeek 或自定义 OpenAI 兼容接口。
 模型与 Base URL 会写进 `Research Interests` Issue；采集器根据提供商选择上表对应的
 Secret。Secret 的值不会进入 Issue、网页数据或提交记录。
+
+## 多用户公开网站模式
+
+GitHub Pages 本身只负责公开静态页面，不能安全地完成账号认证、密码保存和用户数据隔离。项目因此提供一个可选的 Supabase 后端：
+
+- Supabase Auth 负责邮箱注册、登录、邮件验证和密码哈希；网页与数据库均不保存明文密码。
+- `user_settings`、`user_papers`、`collection_runs` 和 `collection_requests` 均按 `user_id` 存储。
+- Row Level Security 使用当前登录用户 ID 限制读取和写入；普通浏览器账号不能读取其他人的行。
+- 智谱、Gemini、OpenAI、DeepSeek、自定义接口与 SerpApi Key 只经 HTTPS 发送到 Edge Function，使用 AES-256-GCM 加密；浏览器只能读取配置状态和末四位。
+- GitHub Actions 使用服务端凭据解密当前用户的 Key，按账号运行采集器，再将结果写回该账号的论文库。
+- 页面中的增量刷新与清空后重抓会建立个人队列请求；后台每 30 分钟处理一次，日常全量更新仍在每天运行。
+
+### 启用步骤
+
+1. 创建 Supabase 项目，在 SQL Editor 中运行 [`supabase/migrations/202609190001_multi_user.sql`](supabase/migrations/202609190001_multi_user.sql)。
+2. 部署 [`supabase/functions/user-credentials/index.ts`](supabase/functions/user-credentials/index.ts) 为 `user-credentials` Edge Function。
+3. 生成一个随机 32 字节主密钥并进行 Base64 编码。把同一个值分别配置为：
+   - Supabase Edge Function Secret：`USER_SECRET_MASTER_KEY`
+   - GitHub Actions Secret：`USER_SECRET_MASTER_KEY`
+4. 在 Edge Function Secrets 中设置 `ALLOWED_ORIGIN`，值为完整 Pages 来源，例如 `https://YOUR_USERNAME.github.io`。
+5. 在 Supabase Auth 的 URL Configuration 中，把 Pages 完整地址设为 Site URL，并加入 Redirect URLs，例如 `https://YOUR_USERNAME.github.io/YOUR_REPOSITORY/`。
+   同时开启邮箱确认，把最短密码长度设为至少 10 位；公开注册时建议再开启 CAPTCHA 和泄露密码检测。
+6. 在 GitHub **Settings → Secrets and variables → Actions** 添加：
+
+   | 类型 | 名称 | 值 |
+   |---|---|---|
+   | Variable | `MULTI_USER_MODE` | `true` |
+   | Variable | `SUPABASE_URL` | Supabase Project URL |
+   | Variable | `SUPABASE_PUBLISHABLE_KEY` | Publishable key；旧项目可使用 anon key |
+   | Secret | `SUPABASE_SERVICE_ROLE_KEY` | Service role key；绝不能放进前端 |
+   | Secret | `USER_SECRET_MASTER_KEY` | 与 Edge Function 完全相同的 Base64 主密钥 |
+
+7. 手动运行一次 **更新 Se 文献网站**。部署后页面会强制登录；新账号第一次登录时会得到默认硒机制研究配置，之后的设置与论文只属于该账号。
+
+未设置 `MULTI_USER_MODE=true` 时，项目继续使用原有单用户 GitHub Pages 模式，因此 Fork 后不会因为缺少 Supabase 而无法打开。
 
 ## 网页配置抓取与 API
 
@@ -169,9 +205,10 @@ Google Scholar 需要 `SERPAPI_API_KEY`。缺少某一来源的密钥或某一 A
 
 ## 本地运行
 
-需要 Python 3.11 或更高版本。采集器只使用 Python 标准库。
+需要 Python 3.11 或更高版本。单用户采集器只使用 Python 标准库；多用户服务任务额外使用 `cryptography` 解密用户密钥。
 
 ```bash
+python -m pip install -r requirements.txt
 python scripts/collect_papers.py --lookback-days 7
 python -m http.server 8000 --directory web
 ```
@@ -228,12 +265,22 @@ python scripts/collect_papers.py
 ├── config/
 │   ├── interests.json
 │   └── journal_metrics.json
-├── scripts/collect_papers.py
-├── tests/test_collect_papers.py
+├── scripts/
+│   ├── collect_papers.py
+│   ├── collect_users.py
+│   └── write_web_config.py
+├── supabase/
+│   ├── functions/user-credentials/index.ts
+│   └── migrations/202609190001_multi_user.sql
+├── tests/
+│   ├── test_collect_papers.py
+│   └── test_multi_user.py
 └── web/
+    ├── backend.js
     ├── data/papers.json
     ├── app.js
     ├── index.html
+    ├── runtime-config.js
     └── styles.css
 ```
 

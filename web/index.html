@@ -3,11 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" />
     <title>Se Mechanism Daily</title>
     <meta name="description" content="自动追踪硒代谢、硒蛋白、氧化还原、铁死亡、免疫炎症及硒相关疾病机制研究。" />
-    <link rel="stylesheet" href="./styles.css?v=20260917-codex" />
+    <link rel="stylesheet" href="./styles.css?v=20260919-accounts" />
   </head>
   <body data-theme="dark">
+    <section class="auth-gate" id="authGate" hidden aria-labelledby="authTitle">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-mark">Se</span><div><strong>Mechanism Daily</strong><span>Personal research workspace</span></div></div>
+        <div class="auth-copy"><span class="eyebrow">PRIVATE WORKSPACE</span><h1 id="authTitle">登录你的文献空间</h1><p>每个账号拥有独立的检索范围、关键词、API 密钥、抓取日期和论文库。</p></div>
+        <form id="authForm" class="auth-form">
+          <label class="field"><span>邮箱</span><input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com" /></label>
+          <label class="field"><span>密码</span><input id="authPassword" type="password" autocomplete="current-password" minlength="10" required placeholder="至少 10 位" /></label>
+          <button class="primary-button auth-submit" id="authSubmit" type="submit">登录</button>
+        </form>
+        <button class="auth-switch" id="authSwitch" type="button">没有账号？创建账号</button>
+        <p class="auth-message" id="authMessage">密码由认证服务进行带随机盐的安全哈希，本站不会保存明文。</p>
+      </div>
+    </section>
+
     <div class="app-layout">
       <aside class="sidebar" id="sidebar" aria-label="抓取历史">
         <div class="sidebar-brand">
@@ -32,6 +48,7 @@
           <div class="workspace-title"><h1 id="viewTitle">今日文献</h1><p id="updatedAt">正在读取文献数据</p></div>
           <div class="header-actions">
             <button class="text-button" id="themeButton" type="button" title="切换主题">◐ <span>主题</span></button>
+            <button class="text-button account-button" id="accountButton" type="button" hidden title="退出当前账号"><span id="accountLabel">账号</span> ↗</button>
             <button class="text-button" id="dataActionsButton" type="button">↻ <span>运行抓取</span></button>
             <button class="text-button emphasis" id="headerSettingsButton" type="button">⚙ <span>配置</span></button>
           </div>
@@ -61,7 +78,7 @@
     <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
       <form method="dialog" class="settings-panel" id="settingsForm">
         <header class="dialog-header">
-          <div><span class="eyebrow">ADMIN CONFIGURATION</span><h2 id="settingsTitle">抓取与 API 设置</h2><p>公开页面只保存非敏感配置；API Key 始终留在 GitHub Secrets。</p></div>
+          <div><span class="eyebrow">PERSONAL CONFIGURATION</span><h2 id="settingsTitle">抓取与 API 设置</h2><p id="settingsSecurityNote">API Key 不写入网页或仓库；启用账号模式后仅以密文保存在服务端。</p></div>
           <button class="icon-button" id="settingsClose" type="button" aria-label="关闭">×</button>
         </header>
         <div class="settings-body">
@@ -72,18 +89,21 @@
               <label class="field"><span>模型</span><input id="modelInput" autocomplete="off" /></label>
               <label class="field full-width"><span>API Base URL</span><input id="baseUrlInput" type="url" autocomplete="off" placeholder="https://.../v1" /></label>
             </div>
-            <div class="secret-card"><div><strong id="secretName">ZHIPU_API_KEY</strong><span id="secretStatus">密钥状态将在刷新后显示</span></div><a class="secondary-button" id="secretsLink" href="#" target="_blank" rel="noreferrer">打开 GitHub Secrets ↗</a></div>
+            <div class="secret-card"><div><strong id="secretName">ZHIPU_API_KEY</strong><span id="secretStatus">密钥状态将在刷新后显示</span></div><div class="secret-controls"><input id="apiKeyInput" type="password" autocomplete="new-password" placeholder="输入新 Key（保存后不回显）" /><button class="secondary-button" id="saveApiKeyButton" type="button">加密保存</button><a class="secondary-button" id="secretsLink" href="#" target="_blank" rel="noreferrer">打开 GitHub Secrets ↗</a></div></div>
           </section>
 
           <section class="settings-section">
             <div class="section-heading"><div><h3>抓取范围</h3><p>选择数据源，并控制每次检索与摘要数量。</p></div></div>
             <div class="source-grid" id="sourceEditor"></div>
-            <div class="form-grid four-columns">
+            <div class="form-grid date-range-grid">
               <label class="field"><span>回溯天数</span><input id="lookbackInput" type="number" min="1" max="90" /></label>
+              <label class="field"><span>指定起始日（可选）</span><input id="dateFromInput" type="date" /></label>
+              <label class="field"><span>指定结束日（可选）</span><input id="dateToInput" type="date" /></label>
               <label class="field"><span>每方向上限</span><input id="maxPerTopicInput" type="number" min="1" max="50" /></label>
               <label class="field"><span>AI 摘要上限</span><input id="maxSummariesInput" type="number" min="0" max="100" /></label>
               <label class="field"><span>历史保存上限</span><input id="maxPapersInput" type="number" min="10" max="2000" /></label>
             </div>
+            <div class="secret-card source-secret" id="serpApiCard"><div><strong>SERPAPI_API_KEY</strong><span id="serpApiStatus">Google Scholar 需要此密钥</span></div><div class="secret-controls"><input id="serpApiKeyInput" type="password" autocomplete="new-password" placeholder="输入新的 SerpApi Key" /><button class="secondary-button" id="saveSerpApiKeyButton" type="button">加密保存</button></div></div>
           </section>
 
           <section class="settings-section">
@@ -92,7 +112,7 @@
           </section>
         </div>
         <footer class="dialog-footer">
-          <div class="dialog-footer-note" id="settingsMessage">修改先保存在本浏览器，提交后由 GitHub Actions 应用。</div>
+          <div class="dialog-footer-note" id="settingsMessage">账号模式下会保存到你的个人空间；未启用时仍使用 GitHub 配置流程。</div>
           <div class="dialog-footer-actions"><button class="secondary-button" id="copyConfigButton" type="button">复制 JSON</button><button class="secondary-button" id="saveDraftButton" type="button">保存草稿</button><button class="primary-button" id="applyConfigButton" type="button">应用配置并抓取 ↗</button></div>
         </footer>
       </form>
@@ -100,7 +120,7 @@
 
     <dialog class="data-dialog" id="dataActionsDialog" aria-labelledby="dataActionsTitle">
       <div class="compact-dialog">
-        <header class="dialog-header"><div><span class="eyebrow">GITHUB ACTIONS</span><h2 id="dataActionsTitle">运行文献抓取</h2><p>进入已登录的 GitHub 后确认运行，网页不会接触你的令牌。</p></div><button class="icon-button" id="dataActionsClose" type="button" aria-label="关闭">×</button></header>
+        <header class="dialog-header"><div><span class="eyebrow" id="runModeLabel">COLLECTION</span><h2 id="dataActionsTitle">运行文献抓取</h2><p id="runModeDescription">提交后会进入个人抓取队列，处理完成后刷新页面即可查看。</p></div><button class="icon-button" id="dataActionsClose" type="button" aria-label="关闭">×</button></header>
         <div class="run-options"><a class="run-option" id="refreshPapersLink" href="#" target="_blank" rel="noreferrer"><span>↻</span><div><strong>增量刷新</strong><small>保留历史数据，抓取最新文献。</small></div></a><a class="run-option danger" id="clearPapersLink" href="#" target="_blank" rel="noreferrer"><span>⌫</span><div><strong>清空后重抓</strong><small>在 Run workflow 中打开 clear_cache。</small></div></a></div>
       </div>
     </dialog>
@@ -115,6 +135,9 @@
       <article class="topic-config-card"><div class="topic-config-head"><span class="topic-number"></span><button class="remove-topic" type="button" aria-label="删除方向">删除</button></div><div class="form-grid two-columns"><label class="field"><span>方向名称</span><input class="topic-name" /></label><label class="field"><span>稳定 ID</span><input class="topic-id" /></label><label class="field full-width"><span>方向说明</span><textarea class="topic-description" rows="2"></textarea></label><label class="field full-width"><span>关键词（每行一个）</span><textarea class="topic-keywords" rows="5"></textarea></label></div></article>
     </template>
 
-    <script src="./app.js?v=20260917-codex"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
+    <script src="./runtime-config.js?v=20260919-accounts"></script>
+    <script src="./backend.js?v=20260919-accounts"></script>
+    <script src="./app.js?v=20260919-accounts"></script>
   </body>
 </html>

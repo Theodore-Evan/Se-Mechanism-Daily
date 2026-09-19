@@ -27,6 +27,7 @@ from scripts.collect_papers import (
     scholar_journal,
     scholar_year,
     summarize_with_ai,
+    within_configured_range,
 )
 
 
@@ -82,6 +83,13 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(settings["max_new_papers"], 70)
         self.assertEqual(settings["max_stored_papers"], 600)
 
+    def test_runtime_config_validates_explicit_date_range(self) -> None:
+        settings = runtime_config({"runtime": {"date_from": "2026-01-01", "date_to": "2026-03-31"}})
+        self.assertEqual(settings["date_from"], "2026-01-01")
+        self.assertEqual(settings["date_to"], "2026-03-31")
+        with self.assertRaises(ValueError):
+            runtime_config({"runtime": {"date_from": "2026-04-01", "date_to": "2026-03-31"}})
+
     def test_runtime_config_never_reads_secret_from_public_json(self) -> None:
         config = {
             "runtime": {
@@ -113,10 +121,10 @@ class ConfigurationTests(unittest.TestCase):
         }
         issues = [
             {"number": 2, "title": "Research Interests", "user": {"login": "attacker"}, "body": f"```json\n{json.dumps(malicious)}\n```"},
-            {"number": 1, "title": "Research Interests", "user": {"login": "Theodore-Evan"}, "body": f"```json\n{json.dumps(trusted)}\n```"},
+            {"number": 1, "title": "Research Interests", "user": {"login": "repository-owner"}, "body": f"```json\n{json.dumps(trusted)}\n```"},
         ]
         with (
-            mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "Theodore-Evan/Se-Mechanism-Daily", "GITHUB_TOKEN": "token"}, clear=False),
+            mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "repository-owner/literature-site", "GITHUB_TOKEN": "token"}, clear=False),
             mock.patch("scripts.collect_papers.request_json", return_value=issues),
         ):
             selected, source = issue_config(repository)
@@ -127,6 +135,12 @@ class ConfigurationTests(unittest.TestCase):
 class NormalizationTests(unittest.TestCase):
     def test_parse_datetime_accepts_year_only(self) -> None:
         self.assertEqual(parse_datetime("2026").date().isoformat(), "2026-01-01")
+
+    def test_explicit_range_uses_publication_date_not_refresh_time(self) -> None:
+        paper = {"published": "2024-05-20", "updated": "2026-09-19T00:00:00+00:00"}
+        now = parse_datetime("2026-09-19T00:00:00+00:00")
+        self.assertTrue(within_configured_range(paper, now, 7, {"date_from": "2024-05-01", "date_to": "2024-05-31"}))
+        self.assertFalse(within_configured_range(paper, now, 7, {"date_from": "2026-01-01", "date_to": "2026-12-31"}))
 
     def test_reconstructs_openalex_abstract(self) -> None:
         abstract = reconstruct_abstract({"Selenium": [0], "controls": [1], "GPX4": [2]})

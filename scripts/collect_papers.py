@@ -379,6 +379,20 @@ def runtime_config(data: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         minimum_score = 0.12
 
+    def optional_date(key: str) -> str:
+        value = str(raw.get(key) or "").strip()
+        if not value:
+            return ""
+        try:
+            return dt.date.fromisoformat(value).isoformat()
+        except ValueError as exc:
+            raise ValueError(f"runtime.{key} 必须是 YYYY-MM-DD 格式") from exc
+
+    date_from = optional_date("date_from")
+    date_to = optional_date("date_to")
+    if date_from and date_to and date_from > date_to:
+        raise ValueError("runtime.date_from 不能晚于 runtime.date_to")
+
     return {
         "provider": provider,
         "provider_name": provider_name,
@@ -386,6 +400,8 @@ def runtime_config(data: dict[str, Any]) -> dict[str, Any]:
         "model": model,
         "secret_name": defaults["secret_name"],
         "lookback_days": bounded_int("lookback_days", int(os.getenv("LOOKBACK_DAYS", "7")), 1, 90),
+        "date_from": date_from,
+        "date_to": date_to,
         "max_per_topic": bounded_int("max_per_topic", int(os.getenv("MAX_PER_TOPIC", "10")), 1, 50),
         "max_summaries": bounded_int("max_summaries", int(os.getenv("MAX_SUMMARIES", "12")), 0, 100),
         "max_new_papers": bounded_int("max_new_papers", int(os.getenv("MAX_NEW_PAPERS", "50")), 1, 200),
@@ -404,6 +420,12 @@ def apply_runtime_config(data: dict[str, Any]) -> dict[str, Any]:
     os.environ["MAX_NEW_PAPERS"] = str(runtime["max_new_papers"])
     os.environ["MAX_STORED_PAPERS"] = str(runtime["max_stored_papers"])
     os.environ["MIN_MATCH_SCORE"] = str(runtime["min_match_score"])
+    for environment_name, runtime_name in (("PAPER_DATE_FROM", "date_from"), ("PAPER_DATE_TO", "date_to")):
+        value = runtime[runtime_name]
+        if value:
+            os.environ[environment_name] = value
+        else:
+            os.environ.pop(environment_name, None)
 
     secret_name = runtime["secret_name"]
     selected_key = os.getenv(secret_name, "").strip()
@@ -556,7 +578,12 @@ def calendar_months() -> tuple[str, ...]:
 
 
 def fetch_pubmed(topic: Topic, limit: int) -> list[dict[str, Any]]:
-    search_url = f"{PUBMED_EUTILS}/esearch.fcgi?{pubmed_params({'term': topic_query(topic), 'retmax': limit, 'sort': 'pub date'})}"
+    search_parameters: dict[str, Any] = {"term": topic_query(topic), "retmax": limit, "sort": "pub date"}
+    if os.getenv("PAPER_DATE_FROM"):
+        search_parameters.update(mindate=os.environ["PAPER_DATE_FROM"], datetype="pdat")
+    if os.getenv("PAPER_DATE_TO"):
+        search_parameters.update(maxdate=os.environ["PAPER_DATE_TO"], datetype="pdat")
+    search_url = f"{PUBMED_EUTILS}/esearch.fcgi?{pubmed_params(search_parameters)}"
     identifiers = request_json(search_url).get("esearchresult", {}).get("idlist", [])
     if not identifiers:
         return []
@@ -636,6 +663,13 @@ def fetch_openalex(topic: Topic, limit: int) -> list[dict[str, Any]]:
     }
     if os.getenv("OPENALEX_EMAIL") or os.getenv("CONTACT_EMAIL"):
         params["mailto"] = os.getenv("OPENALEX_EMAIL") or os.getenv("CONTACT_EMAIL")
+    filters = []
+    if os.getenv("PAPER_DATE_FROM"):
+        filters.append(f"from_publication_date:{os.environ['PAPER_DATE_FROM']}")
+    if os.getenv("PAPER_DATE_TO"):
+        filters.append(f"to_publication_date:{os.environ['PAPER_DATE_TO']}")
+    if filters:
+        params["filter"] = ",".join(filters)
     data = request_json(f"{OPENALEX_API}?{urllib.parse.urlencode(params)}")
     papers = []
     for item in data.get("results", []):
@@ -687,6 +721,11 @@ def fetch_crossref(topic: Topic, limit: int) -> list[dict[str, Any]]:
         "select": "DOI,title,abstract,author,published,published-online,published-print,issued,created,URL,link,subject,container-title",
     }
     contact = os.getenv("CROSSREF_EMAIL") or os.getenv("CONTACT_EMAIL")
+    if os.getenv("PAPER_DATE_FROM"):
+        params["filter"] = f"from-pub-date:{os.environ['PAPER_DATE_FROM']}"
+    if os.getenv("PAPER_DATE_TO"):
+        current_filter = params.get("filter", "")
+        params["filter"] = ",".join(filter(None, [current_filter, f"until-pub-date:{os.environ['PAPER_DATE_TO']}"]))
     headers = {"User-Agent": f"se-mechanism-literature-tracker/1.0 (mailto:{contact})"} if contact else None
     data = request_json(f"{CROSSREF_API}?{urllib.parse.urlencode(params)}", headers=headers)
     papers = []
@@ -746,6 +785,10 @@ def fetch_google_scholar(topic: Topic, limit: int) -> list[dict[str, Any]]:
         "scisbd": 2,
         "api_key": api_key,
     }
+    if os.getenv("PAPER_DATE_FROM"):
+        params["as_ylo"] = os.environ["PAPER_DATE_FROM"][:4]
+    if os.getenv("PAPER_DATE_TO"):
+        params["as_yhi"] = os.environ["PAPER_DATE_TO"][:4]
     data = request_json(f"{SERPAPI_API}?{urllib.parse.urlencode(params)}")
     if data.get("error"):
         raise RuntimeError(str(data["error"]))
@@ -1012,6 +1055,21 @@ def within_days(paper: dict[str, Any], now: dt.datetime, days: int) -> bool:
     return bool(activity and activity >= now - dt.timedelta(days=max(days, 1)))
 
 
+def within_configured_range(paper: dict[str, Any], now: dt.datetime, days: int, runtime: dict[str, Any]) -> bool:
+    activity = parse_datetime(paper.get("published")) or paper_activity(paper)
+    if not activity:
+        return False
+    date_from = str(runtime.get("date_from") or "")
+    date_to = str(runtime.get("date_to") or "")
+    if date_from and activity.date() < dt.date.fromisoformat(date_from):
+        return False
+    if date_to and activity.date() > dt.date.fromisoformat(date_to):
+        return False
+    if date_from or date_to:
+        return True
+    return within_days(paper, now, days)
+
+
 def collect(
     config_path: Path,
     output_path: Path,
@@ -1079,9 +1137,14 @@ def collect(
 
     scored = [attach_best_match(topics, paper) for paper in deduplicate(fetched)]
     minimum_score = float(os.getenv("MIN_MATCH_SCORE", "0.12"))
-    primary = [paper for paper in scored if paper["best_match"]["score"] >= minimum_score and within_days(paper, now, lookback_days)]
+    primary = [
+        paper
+        for paper in scored
+        if paper["best_match"]["score"] >= minimum_score
+        and within_configured_range(paper, now, lookback_days, runtime)
+    ]
     minimum_daily = max(0, int(os.getenv("MIN_DAILY_PAPERS", "8")))
-    if len(primary) < minimum_daily:
+    if len(primary) < minimum_daily and not (runtime.get("date_from") or runtime.get("date_to")):
         backfill_days = max(lookback_days, int(os.getenv("DAILY_BACKFILL_DAYS", "14")))
         primary_keys = {canonical_key(paper) for paper in primary}
         backfill = [

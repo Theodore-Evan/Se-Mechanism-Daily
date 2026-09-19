@@ -1,5 +1,6 @@
 const THEME_STORAGE_KEY = "se-mechanism-theme";
 const DRAFT_STORAGE_KEY = "se-mechanism-config-draft-v2";
+const backend = window.SeBackend || { enabled: () => false, requireAuth: false };
 
 const PROVIDERS = {
   zhipu: { name: "智谱 GLM", base_url: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash-250414", secret: "ZHIPU_API_KEY" },
@@ -21,6 +22,7 @@ const state = {
   data: { papers: [], topics: [], sources: [], stats: {}, runtime: {} },
   filters: { query: "", topic: "all", level: "all", journal: "all", view: "date", date: "" },
   theme: "dark",
+  account: { user: null, credentials: [] },
 };
 
 const nodes = {
@@ -49,6 +51,8 @@ const nodes = {
   paperTemplate: document.querySelector("#paperTemplate"),
   topicEditorTemplate: document.querySelector("#topicEditorTemplate"),
   themeButton: document.querySelector("#themeButton"),
+  accountButton: document.querySelector("#accountButton"),
+  accountLabel: document.querySelector("#accountLabel"),
   openSettingsButton: document.querySelector("#openSettingsButton"),
   headerSettingsButton: document.querySelector("#headerSettingsButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
@@ -59,11 +63,19 @@ const nodes = {
   secretName: document.querySelector("#secretName"),
   secretStatus: document.querySelector("#secretStatus"),
   secretsLink: document.querySelector("#secretsLink"),
+  apiKeyInput: document.querySelector("#apiKeyInput"),
+  saveApiKeyButton: document.querySelector("#saveApiKeyButton"),
   sourceEditor: document.querySelector("#sourceEditor"),
   lookbackInput: document.querySelector("#lookbackInput"),
+  dateFromInput: document.querySelector("#dateFromInput"),
+  dateToInput: document.querySelector("#dateToInput"),
   maxPerTopicInput: document.querySelector("#maxPerTopicInput"),
   maxSummariesInput: document.querySelector("#maxSummariesInput"),
   maxPapersInput: document.querySelector("#maxPapersInput"),
+  serpApiKeyInput: document.querySelector("#serpApiKeyInput"),
+  saveSerpApiKeyButton: document.querySelector("#saveSerpApiKeyButton"),
+  serpApiStatus: document.querySelector("#serpApiStatus"),
+  serpApiCard: document.querySelector("#serpApiCard"),
   topicEditor: document.querySelector("#topicEditor"),
   addTopicButton: document.querySelector("#addTopicButton"),
   copyConfigButton: document.querySelector("#copyConfigButton"),
@@ -75,11 +87,23 @@ const nodes = {
   dataActionsClose: document.querySelector("#dataActionsClose"),
   refreshPapersLink: document.querySelector("#refreshPapersLink"),
   clearPapersLink: document.querySelector("#clearPapersLink"),
+  runModeLabel: document.querySelector("#runModeLabel"),
+  runModeDescription: document.querySelector("#runModeDescription"),
+  authGate: document.querySelector("#authGate"),
+  authForm: document.querySelector("#authForm"),
+  authEmail: document.querySelector("#authEmail"),
+  authPassword: document.querySelector("#authPassword"),
+  authSubmit: document.querySelector("#authSubmit"),
+  authSwitch: document.querySelector("#authSwitch"),
+  authTitle: document.querySelector("#authTitle"),
+  authMessage: document.querySelector("#authMessage"),
   toast: document.querySelector("#toast"),
 };
 
+let authMode = "signin";
+
 function repositoryUrl() {
-  if (!window.location.hostname.endsWith(".github.io")) return "https://github.com/Theodore-Evan/Se-Mechanism-Daily";
+  if (!window.location.hostname.endsWith(".github.io")) return "";
   const owner = window.location.hostname.slice(0, -".github.io".length);
   const repository = window.location.pathname.split("/").filter(Boolean)[0];
   return owner && repository ? `https://github.com/${owner}/${repository}` : "";
@@ -356,10 +380,16 @@ function updateGeneratedStatus(message = "") {
   if (message) { nodes.updatedAt.textContent = message; return; }
   const stats = state.data.stats || {};
   const runtime = state.data.runtime || {};
+  if (backend.enabled() && !state.data.generated_at_iso) {
+    nodes.updatedAt.textContent = "个人空间已建立 · 尚未完成首次抓取";
+    nodes.configSource.textContent = "账号独立配置";
+    return;
+  }
   const mode = stats.collection_mode === "incremental" ? "增量更新" : "重新生成";
   const provider = runtime.provider_name || stats.ai_provider || "AI";
   nodes.updatedAt.textContent = `更新于 ${formatDate(state.data.generated_at_iso)} · ${mode} · ${provider} 摘要 ${Number(stats.ai_summary_count || 0)}/${Number(stats.paper_count || state.data.papers?.length || 0)}`;
-  nodes.configSource.textContent = String(state.data.config_source || "repository").startsWith("issue") ? `Issue 配置 · ${state.data.config_source}` : "仓库默认配置";
+  if (backend.enabled()) nodes.configSource.textContent = "账号独立配置 · 数据隔离";
+  else nodes.configSource.textContent = String(state.data.config_source || "repository").startsWith("issue") ? `Issue 配置 · ${state.data.config_source}` : "仓库默认配置";
 }
 
 function storedTheme() {
@@ -396,6 +426,8 @@ function liveConfig() {
       base_url: runtime.base_url || PROVIDERS[runtime.provider || "zhipu"]?.base_url || "",
       model: runtime.model || PROVIDERS[runtime.provider || "zhipu"]?.model || "",
       lookback_days: Number(runtime.lookback_days || 7),
+      date_from: runtime.date_from || "",
+      date_to: runtime.date_to || "",
       max_per_topic: Number(runtime.max_per_topic || 10),
       max_summaries: Number(runtime.max_summaries || 12),
       max_new_papers: Number(runtime.max_new_papers || 50),
@@ -406,6 +438,7 @@ function liveConfig() {
 }
 
 function savedDraft() {
+  if (backend.enabled()) return null;
   try { return JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || "null"); } catch { return null; }
 }
 
@@ -452,6 +485,23 @@ function updateProviderUi({ usePreset = false } = {}) {
     nodes.modelInput.value = preset.model;
   }
   nodes.secretName.textContent = preset.secret;
+  if (backend.enabled()) {
+    const credential = state.account.credentials.find((item) => item.provider === provider);
+    nodes.secretStatus.textContent = credential ? `已加密保存 · 尾号 ${credential.key_last4}` : "尚未为此账号配置";
+    nodes.secretsLink.hidden = true;
+    nodes.apiKeyInput.hidden = false;
+    nodes.saveApiKeyButton.hidden = false;
+    const serpApi = state.account.credentials.find((item) => item.provider === "serpapi");
+    nodes.serpApiStatus.textContent = serpApi ? `已加密保存 · 尾号 ${serpApi.key_last4}` : "Google Scholar 需要此密钥";
+    nodes.serpApiCard.hidden = false;
+    return;
+  }
+  nodes.secretsLink.hidden = false;
+  nodes.apiKeyInput.hidden = true;
+  nodes.saveApiKeyButton.hidden = true;
+  nodes.serpApiKeyInput.hidden = true;
+  nodes.saveSerpApiKeyButton.hidden = true;
+  nodes.serpApiCard.hidden = true;
   const runtime = state.data.runtime || {};
   const matchesLiveProvider = runtime.provider === provider;
   if (matchesLiveProvider && runtime.secret_configured === true) nodes.secretStatus.textContent = "GitHub Secret 已配置";
@@ -465,6 +515,8 @@ function fillSettings(config) {
   nodes.baseUrlInput.value = runtime.base_url || "";
   nodes.modelInput.value = runtime.model || "";
   nodes.lookbackInput.value = runtime.lookback_days || 7;
+  nodes.dateFromInput.value = runtime.date_from || "";
+  nodes.dateToInput.value = runtime.date_to || "";
   nodes.maxPerTopicInput.value = runtime.max_per_topic || 10;
   nodes.maxSummariesInput.value = runtime.max_summaries ?? 12;
   nodes.maxPapersInput.value = runtime.max_stored_papers || 500;
@@ -476,7 +528,9 @@ function fillSettings(config) {
 
 function openSettings() {
   fillSettings(savedDraft() || liveConfig());
-  nodes.settingsMessage.textContent = savedDraft() ? "已载入这个浏览器中的未提交草稿。" : "当前显示线上正在使用的配置。";
+  nodes.settingsMessage.textContent = backend.enabled()
+    ? "当前显示你的个人配置；保存不会影响其他账号。"
+    : savedDraft() ? "已载入这个浏览器中的未提交草稿。" : "当前显示线上正在使用的配置。";
   nodes.settingsDialog.showModal();
 }
 
@@ -505,6 +559,8 @@ function readSettings() {
       base_url: nodes.baseUrlInput.value.trim().replace(/\/$/, ""),
       model: nodes.modelInput.value.trim(),
       lookback_days: numberValue(nodes.lookbackInput, 7),
+      date_from: nodes.dateFromInput.value,
+      date_to: nodes.dateToInput.value,
       max_per_topic: numberValue(nodes.maxPerTopicInput, 10),
       max_summaries: numberValue(nodes.maxSummariesInput, 12),
       max_new_papers: Number(state.data.runtime?.max_new_papers || 50),
@@ -523,6 +579,7 @@ function validateSettings(config) {
   }
   if (!config.runtime.base_url.startsWith("https://")) throw new Error("API Base URL 必须以 https:// 开头。");
   if (!config.runtime.model) throw new Error("请填写模型名称。");
+  if (config.runtime.date_from && config.runtime.date_to && config.runtime.date_from > config.runtime.date_to) throw new Error("起始日期不能晚于结束日期。");
   return config;
 }
 
@@ -543,9 +600,25 @@ async function copyConfiguration() {
   catch (error) { showToast(error.message || "复制失败"); }
 }
 
-function saveDraft() {
+function applyConfigToState(config) {
+  state.data.sources = config.sources || [];
+  state.data.topics = config.topics || [];
+  state.data.runtime = { ...(state.data.runtime || {}), ...(config.runtime || {}) };
+  hydrateTopicFilter();
+  updateGeneratedStatus();
+  render();
+}
+
+async function saveDraft() {
   try {
     const config = validateSettings(readSettings());
+    if (backend.enabled()) {
+      await backend.saveSettings(config);
+      applyConfigToState(config);
+      nodes.settingsMessage.textContent = "已保存到你的个人空间；其他账号不会看到这些设置。";
+      showToast("个人设置已保存");
+      return;
+    }
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(config));
     nodes.settingsMessage.textContent = "草稿已保存在此浏览器；尚未影响线上抓取。";
     showToast("本地草稿已保存");
@@ -555,6 +628,17 @@ function saveDraft() {
 async function applyConfiguration() {
   try {
     const json = configJson();
+    if (backend.enabled()) {
+      const config = JSON.parse(json);
+      await backend.saveSettings(config);
+      if (nodes.apiKeyInput.value.trim()) await saveCredential(config.runtime.provider, nodes.apiKeyInput, { quiet: true });
+      if (nodes.serpApiKeyInput.value.trim()) await saveCredential("serpapi", nodes.serpApiKeyInput, { quiet: true });
+      await backend.queueCollection(false);
+      applyConfigToState(config);
+      nodes.settingsDialog.close();
+      showToast("设置已保存，抓取请求已进入队列");
+      return;
+    }
     localStorage.setItem(DRAFT_STORAGE_KEY, json);
     const repository = repositoryUrl();
     if (!repository) throw new Error("无法识别 GitHub 仓库地址。");
@@ -579,6 +663,70 @@ async function applyConfiguration() {
   } catch (error) { showToast(error.message); }
 }
 
+async function saveCredential(provider, input, { quiet = false } = {}) {
+  try {
+    const value = input.value.trim();
+    if (!value) throw new Error("请先输入 API Key。");
+    const saved = await backend.saveCredential(provider, value);
+    input.value = "";
+    state.account.credentials = state.account.credentials.filter((item) => item.provider !== provider);
+    state.account.credentials.push(saved);
+    updateProviderUi();
+    if (!quiet) showToast("API Key 已加密保存");
+  } catch (error) {
+    if (!quiet) showToast(error.message || "API Key 保存失败");
+    throw error;
+  }
+}
+
+async function queueCollection(clearCache) {
+  try {
+    await backend.queueCollection(clearCache);
+    nodes.dataActionsDialog.close();
+    showToast(clearCache ? "已提交清空后重抓" : "已提交增量抓取");
+  } catch (error) { showToast(error.message || "提交失败"); }
+}
+
+function showAuthGate(message = "") {
+  nodes.authGate.hidden = false;
+  document.body.classList.add("auth-required");
+  if (message) nodes.authMessage.textContent = message;
+}
+
+function hideAuthGate() {
+  nodes.authGate.hidden = true;
+  document.body.classList.remove("auth-required");
+}
+
+function updateAuthMode(mode) {
+  authMode = mode === "signup" ? "signup" : "signin";
+  nodes.authTitle.textContent = authMode === "signup" ? "创建你的文献空间" : "登录你的文献空间";
+  nodes.authSubmit.textContent = authMode === "signup" ? "创建账号" : "登录";
+  nodes.authSwitch.textContent = authMode === "signup" ? "已有账号？返回登录" : "没有账号？创建账号";
+  nodes.authPassword.autocomplete = authMode === "signup" ? "new-password" : "current-password";
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  nodes.authSubmit.disabled = true;
+  nodes.authMessage.textContent = authMode === "signup" ? "正在创建独立空间…" : "正在验证账号…";
+  try {
+    const email = nodes.authEmail.value.trim();
+    const password = nodes.authPassword.value;
+    const result = authMode === "signup" ? await backend.signUp(email, password) : await backend.signIn(email, password);
+    if (authMode === "signup" && !result.session) {
+      nodes.authMessage.textContent = "账号已创建。请打开验证邮件，验证后再登录。";
+      updateAuthMode("signin");
+      return;
+    }
+    await loadAuthenticatedWorkspace();
+  } catch (error) {
+    nodes.authMessage.textContent = error.message || "登录失败，请检查邮箱和密码。";
+  } finally {
+    nodes.authSubmit.disabled = false;
+  }
+}
+
 function bindEvents() {
   nodes.sidebarToggle.addEventListener("click", () => document.body.classList.add("sidebar-open"));
   nodes.sidebarScrim.addEventListener("click", () => document.body.classList.remove("sidebar-open"));
@@ -588,39 +736,129 @@ function bindEvents() {
   nodes.journalFilter.addEventListener("change", (event) => { state.filters.journal = event.target.value; render(); });
   nodes.searchInput.addEventListener("input", (event) => { state.filters.query = event.target.value.trim(); render(); });
   nodes.themeButton.addEventListener("click", () => applyTheme(state.theme === "dark" ? "light" : "dark"));
+  nodes.accountButton.addEventListener("click", async () => {
+    try { await backend.signOut(); window.location.reload(); }
+    catch (error) { showToast(error.message || "退出失败"); }
+  });
   nodes.openSettingsButton.addEventListener("click", openSettings);
   nodes.headerSettingsButton.addEventListener("click", openSettings);
   nodes.settingsClose.addEventListener("click", () => nodes.settingsDialog.close());
   nodes.settingsDialog.addEventListener("click", (event) => { if (event.target === nodes.settingsDialog) nodes.settingsDialog.close(); });
   nodes.providerSelect.addEventListener("change", () => updateProviderUi({ usePreset: true }));
+  nodes.saveApiKeyButton.addEventListener("click", () => saveCredential(nodes.providerSelect.value, nodes.apiKeyInput));
+  nodes.saveSerpApiKeyButton.addEventListener("click", () => saveCredential("serpapi", nodes.serpApiKeyInput));
   nodes.addTopicButton.addEventListener("click", () => addTopicEditor());
   nodes.copyConfigButton.addEventListener("click", copyConfiguration);
   nodes.saveDraftButton.addEventListener("click", saveDraft);
   nodes.applyConfigButton.addEventListener("click", applyConfiguration);
-  nodes.dataActionsButton.addEventListener("click", () => nodes.dataActionsDialog.showModal());
+  nodes.dataActionsButton.addEventListener("click", () => {
+    if (backend.enabled()) {
+      nodes.runModeLabel.textContent = "PERSONAL COLLECTION";
+      nodes.runModeDescription.textContent = "提交到你的个人抓取队列；配置、日期历史和结果均与其他账号隔离。";
+    } else {
+      nodes.runModeLabel.textContent = "GITHUB ACTIONS";
+      nodes.runModeDescription.textContent = "进入已登录的 GitHub 后确认运行，网页不会接触你的令牌。";
+    }
+    nodes.dataActionsDialog.showModal();
+  });
   nodes.dataActionsClose.addEventListener("click", () => nodes.dataActionsDialog.close());
   nodes.dataActionsDialog.addEventListener("click", (event) => { if (event.target === nodes.dataActionsDialog) nodes.dataActionsDialog.close(); });
+  nodes.refreshPapersLink.addEventListener("click", (event) => {
+    if (!backend.enabled()) return;
+    event.preventDefault();
+    queueCollection(false);
+  });
+  nodes.clearPapersLink.addEventListener("click", (event) => {
+    if (!backend.enabled()) return;
+    event.preventDefault();
+    queueCollection(true);
+  });
+  nodes.authForm.addEventListener("submit", submitAuth);
+  nodes.authSwitch.addEventListener("click", () => updateAuthMode(authMode === "signin" ? "signup" : "signin"));
 }
 
-async function main() {
-  configureRepositoryLinks();
-  applyTheme(storedTheme());
-  bindEvents();
-  try {
-    const response = await fetch("./data/papers.json", { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    state.data = await response.json();
-  } catch (error) {
-    updateGeneratedStatus(`数据读取失败：${error.message}`);
-    nodes.paperList.textContent = "文献数据加载失败，请稍后刷新。";
-    return;
-  }
+async function loadStaticData() {
+  const response = await fetch("./data/papers.json", { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function renderWorkspace() {
   state.filters.date = newestDateKey();
   renderDateNavigation();
   hydrateTopicFilter();
   updateGeneratedStatus();
   render();
   if (new URLSearchParams(window.location.search).get("settings") === "1") openSettings();
+}
+
+async function loadAuthenticatedWorkspace() {
+  nodes.authMessage.textContent = "正在载入你的独立文献空间…";
+  const [template, workspace] = await Promise.all([loadStaticData(), backend.loadWorkspace()]);
+  const defaultConfig = {
+    sources: template.sources || AVAILABLE_SOURCES,
+    topics: template.topics || [],
+    runtime: template.runtime || {},
+  };
+  const config = workspace.config || defaultConfig;
+  if (!workspace.config) await backend.saveSettings(config);
+  try { state.account.credentials = await backend.credentialStatus(); }
+  catch (error) { state.account.credentials = []; console.warn("Credential status unavailable", error); }
+  state.account.user = workspace.user;
+  const latestRun = workspace.latestRun;
+  state.data = {
+    data_kind: "selenium_mechanism",
+    config_source: "account",
+    papers: workspace.papers || [],
+    sources: config.sources || [],
+    topics: config.topics || [],
+    runtime: { ...(config.runtime || {}) },
+    stats: latestRun?.stats || {},
+    generated_at_iso: latestRun?.completed_at || "",
+  };
+  const selectedCredential = state.account.credentials.find((item) => item.provider === state.data.runtime.provider);
+  state.data.runtime.secret_configured = Boolean(selectedCredential);
+  nodes.accountLabel.textContent = workspace.user.email || "我的账号";
+  nodes.accountButton.hidden = false;
+  hideAuthGate();
+  renderWorkspace();
+  if (latestRun?.status === "failed") updateGeneratedStatus(`最近一次抓取失败：${latestRun.error_message || "请检查配置"}`);
+}
+
+async function main() {
+  configureRepositoryLinks();
+  applyTheme(storedTheme());
+  bindEvents();
+  updateAuthMode("signin");
+
+  if (backend.requireAuth && !backend.enabled()) {
+    showAuthGate("云后端尚未完成配置，请联系网站管理员。");
+    nodes.authSubmit.disabled = true;
+    return;
+  }
+
+  if (backend.enabled()) {
+    try {
+      const activeSession = await backend.session();
+      if (!activeSession) {
+        showAuthGate();
+        return;
+      }
+      await loadAuthenticatedWorkspace();
+      return;
+    } catch (error) {
+      showAuthGate(`个人空间加载失败：${error.message}`);
+      return;
+    }
+  }
+
+  try { state.data = await loadStaticData(); }
+  catch (error) {
+    updateGeneratedStatus(`数据读取失败：${error.message}`);
+    nodes.paperList.textContent = "文献数据加载失败，请稍后刷新。";
+    return;
+  }
+  renderWorkspace();
 }
 
 main();
