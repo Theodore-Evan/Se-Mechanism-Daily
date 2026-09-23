@@ -138,7 +138,7 @@ begin
       updated_at
     ) values (
       target_user,
-      coalesce(nullif(item->>'id', ''), encode(digest(item::text, 'sha256'), 'hex')),
+      coalesce(nullif(item->>'id', ''), encode(extensions.digest(item::text, 'sha256'), 'hex')),
       item,
       nullif(item->>'first_seen_at', '')::timestamptz,
       nullif(item->>'last_seen_at', '')::timestamptz,
