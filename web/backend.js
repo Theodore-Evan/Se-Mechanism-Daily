@@ -51,18 +51,46 @@
     const activeSession = await session();
     if (!activeSession) throw new Error("请先登录。");
     const userId = activeSession.user.id;
-    const [settingsResult, papersResult, runResult] = await Promise.all([
+    const [settingsResult, papersResult, runResult, starredResult] = await Promise.all([
       current.from("user_settings").select("config,updated_at").eq("user_id", userId).maybeSingle(),
       current.from("user_papers").select("payload").eq("user_id", userId).order("last_seen_at", { ascending: false }),
       current.from("collection_runs").select("status,started_at,completed_at,stats,error_message").eq("user_id", userId).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+      current.from("user_starred_papers").select("paper_id,payload,created_at").eq("user_id", userId).order("created_at", { ascending: false }),
     ]);
     assertOk(settingsResult.error);
     assertOk(papersResult.error);
     assertOk(runResult.error);
+    const starredTableMissing = starredResult.error?.code === "42P01" || /user_starred_papers/i.test(starredResult.error?.message || "");
+    if (starredResult.error && !starredTableMissing) assertOk(starredResult.error);
     const config = settingsResult.data?.config || null;
     const papers = (papersResult.data || []).map((row) => row.payload).filter(Boolean);
+    const starredPapers = (starredResult.data || []).map((row) => ({
+      paper_id: row.paper_id,
+      payload: row.payload,
+      created_at: row.created_at,
+    })).filter((row) => row.paper_id && row.payload);
     const latestRun = runResult.data || null;
-    return { user: activeSession.user, config, papers, latestRun, settingsUpdatedAt: settingsResult.data?.updated_at || "" };
+    return { user: activeSession.user, config, papers, starredPapers, latestRun, settingsUpdatedAt: settingsResult.data?.updated_at || "" };
+  }
+
+  async function setStarredPaper(paperId, payload, starred) {
+    const activeSession = await session();
+    if (!activeSession) throw new Error("登录已失效，请重新登录。");
+    const table = getClient().from("user_starred_papers");
+    if (starred) {
+      const { error } = await table.upsert({
+        user_id: activeSession.user.id,
+        paper_id: paperId,
+        payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,paper_id" });
+      assertOk(error);
+      return;
+    }
+    const { error } = await table.delete()
+      .eq("user_id", activeSession.user.id)
+      .eq("paper_id", paperId);
+    assertOk(error);
   }
 
   async function saveSettings(config) {
@@ -116,6 +144,7 @@
     signUp,
     signOut,
     loadWorkspace,
+    setStarredPaper,
     saveSettings,
     credentialStatus,
     saveCredential,
@@ -123,4 +152,3 @@
     onAuthStateChange,
   };
 })();
-

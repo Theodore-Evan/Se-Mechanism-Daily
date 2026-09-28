@@ -20,6 +20,7 @@
 - 研究方向配置：编辑 JSON 文件，或通过仓库中的 `Research Interests` Issue 修改
 - 静态部署：生成纯 HTML、CSS 和 JavaScript，可直接部署到 GitHub Pages
 - 多用户模式：可接入 Supabase Auth 与 Postgres；每个账号拥有独立设置、密钥、日期历史和论文库
+- Star 研究树：在论文卡片收藏重点文献，并按研究方向组织关键词、研究问题、方法与创新节点
 - 隐私友好：代码中不包含维护者姓名、邮箱、账号、API Key 或固定仓库地址
 
 ## 工作流程
@@ -77,7 +78,7 @@ Secret。Secret 的值不会进入 Issue、网页数据或提交记录。
 GitHub Pages 本身只负责公开静态页面，不能安全地完成账号认证、密码保存和用户数据隔离。项目因此提供一个可选的 Supabase 后端：
 
 - Supabase Auth 负责邮箱注册、登录、邮件验证和密码哈希；网页与数据库均不保存明文密码。
-- `user_settings`、`user_papers`、`collection_runs` 和 `collection_requests` 均按 `user_id` 存储。
+- `user_settings`、`user_papers`、`user_starred_papers`、`collection_runs` 和 `collection_requests` 均按 `user_id` 存储。
 - Row Level Security 使用当前登录用户 ID 限制读取和写入；普通浏览器账号不能读取其他人的行。
 - 智谱、Gemini、OpenAI、DeepSeek、自定义接口与 SerpApi Key 只经 HTTPS 发送到 Edge Function，使用 AES-256-GCM 加密；浏览器只能读取配置状态和末四位。
 - GitHub Actions 使用服务端凭据解密当前用户的 Key，按账号运行采集器，再将结果写回该账号的论文库。
@@ -86,6 +87,7 @@ GitHub Pages 本身只负责公开静态页面，不能安全地完成账号认�
 ### 启用步骤
 
 1. 创建 Supabase 项目，在 SQL Editor 中运行 [`supabase/migrations/202609190001_multi_user.sql`](supabase/migrations/202609190001_multi_user.sql)。
+   已经部署旧版多用户数据库的站点还需运行 [`supabase/migrations/202609280001_starred_papers.sql`](supabase/migrations/202609280001_starred_papers.sql)，以启用账号隔离的 Star 收藏。
 2. 部署 [`supabase/functions/user-credentials/index.ts`](supabase/functions/user-credentials/index.ts) 为 `user-credentials` Edge Function。
 3. 生成一个随机 32 字节主密钥并进行 Base64 编码。把同一个值分别配置为：
    - Supabase Edge Function Secret：`USER_SECRET_MASTER_KEY`

@@ -7,7 +7,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" />
     <title>Se Mechanism Daily</title>
     <meta name="description" content="自动追踪硒代谢、硒蛋白、氧化还原、铁死亡、免疫炎症及硒相关疾病机制研究。" />
-    <link rel="stylesheet" href="./styles.css?v=20260919-accounts" />
+    <link rel="stylesheet" href="./styles.css?v=20260928-stars" />
   </head>
   <body data-theme="dark">
     <section class="auth-gate" id="authGate" hidden aria-labelledby="authTitle">
@@ -34,6 +34,7 @@
         <nav class="sidebar-nav" aria-label="文献视图">
           <button class="nav-item" type="button" data-view="all"><span class="nav-icon">⌂</span><span>全部文献</span><span class="nav-count" id="allCount">0</span></button>
           <button class="nav-item" type="button" data-view="highlights"><span class="nav-icon">✦</span><span>本周精选</span><span class="nav-count" id="highlightCount">0</span></button>
+          <button class="nav-item" type="button" data-view="starred"><span class="nav-icon">★</span><span>Star 思维树</span><span class="nav-count" id="starCount">0</span></button>
         </nav>
         <div class="history-heading"><span>抓取日期</span><span id="dateCount">0 天</span></div>
         <nav class="date-navigation" id="dateNavigation" aria-label="按抓取日期查看"></nav>
@@ -61,7 +62,7 @@
           <div><span class="metric-value" id="topScore">0.00</span><span class="metric-label">最高匹配</span></div>
         </section>
 
-        <section class="toolbar" aria-label="筛选论文">
+        <section class="toolbar" id="filterToolbar" aria-label="筛选论文">
           <label class="field"><span>方向</span><select id="topicFilter"><option value="all">全部方向</option></select></label>
           <label class="field compact"><span>匹配</span><select id="levelFilter"><option value="all">全部</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
           <label class="field journal-filter"><span>期刊</span><select id="journalFilter"><option value="all">全部期刊</option><option value="cns">CNS 主刊</option><option value="nature">Nature 系列</option><option value="science">Science 系列</option><option value="cell">Cell 系列</option><option value="top">其他 Top</option><option value="q1">JCR Q1</option><option value="q2">JCR Q2</option><option value="q3">JCR Q3</option><option value="q4">JCR Q4</option><option value="unconfigured">指标待配置</option></select></label>
@@ -128,7 +129,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <template id="paperTemplate">
-      <article class="paper-card"><div class="paper-main"><div class="paper-meta"><span class="match-badge"></span><span class="summary-status"></span><span class="paper-date"></span><span class="paper-source"></span></div><h3 class="paper-title"></h3><p class="paper-authors"></p><div class="journal-meta"><span class="journal-name"></span><span class="journal-impact"></span><span class="journal-quartile"></span><span class="journal-tier"></span></div><div class="paper-tags"></div><dl class="summary-grid"><div><dt>问题</dt><dd class="summary-problem"></dd></div><div><dt>方法</dt><dd class="summary-method"></dd></div><div><dt>创新</dt><dd class="summary-innovation"></dd></div><div><dt>证据</dt><dd class="summary-evidence"></dd></div><div><dt>局限</dt><dd class="summary-limitations"></dd></div><div><dt>相关性</dt><dd class="summary-relevant"></dd></div></dl></div><footer class="paper-footer"><span class="match-reason"></span><div class="paper-links"><a class="paper-link abs-link" target="_blank" rel="noreferrer">原文</a><a class="paper-link pdf-link" target="_blank" rel="noreferrer">PDF</a><a class="paper-link download-link" target="_blank" rel="noreferrer">下载</a></div></footer></article>
+      <article class="paper-card"><div class="paper-main"><div class="paper-meta"><span class="match-badge"></span><span class="summary-status"></span><span class="paper-date"></span><span class="paper-source"></span></div><h3 class="paper-title"></h3><p class="paper-authors"></p><div class="journal-meta"><span class="journal-name"></span><span class="journal-impact"></span><span class="journal-quartile"></span><span class="journal-tier"></span></div><div class="paper-tags"></div><dl class="summary-grid"><div><dt>问题</dt><dd class="summary-problem"></dd></div><div><dt>方法</dt><dd class="summary-method"></dd></div><div><dt>创新</dt><dd class="summary-innovation"></dd></div><div><dt>证据</dt><dd class="summary-evidence"></dd></div><div><dt>局限</dt><dd class="summary-limitations"></dd></div><div><dt>相关性</dt><dd class="summary-relevant"></dd></div></dl></div><footer class="paper-footer"><span class="match-reason"></span><div class="paper-actions"><button class="star-button" type="button" aria-pressed="false"><span class="star-icon" aria-hidden="true">☆</span><span class="star-label">Star</span></button><div class="paper-links"><a class="paper-link abs-link" target="_blank" rel="noreferrer">原文</a><a class="paper-link pdf-link" target="_blank" rel="noreferrer">PDF</a><a class="paper-link download-link" target="_blank" rel="noreferrer">下载</a></div></div></footer></article>
     </template>
 
     <template id="topicEditorTemplate">
@@ -136,8 +137,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
-    <script src="./runtime-config.js?v=20260919-accounts"></script>
-    <script src="./backend.js?v=20260919-accounts"></script>
-    <script src="./app.js?v=20260919-accounts"></script>
+    <script src="./runtime-config.js?v=20260928-stars"></script>
+    <script src="./backend.js?v=20260928-stars"></script>
+    <script src="./app.js?v=20260928-stars"></script>
   </body>
 </html>

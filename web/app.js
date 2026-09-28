@@ -1,5 +1,6 @@
 const THEME_STORAGE_KEY = "se-mechanism-theme";
 const DRAFT_STORAGE_KEY = "se-mechanism-config-draft-v2";
+const STAR_STORAGE_KEY = "se-mechanism-starred-papers-v1";
 const backend = window.SeBackend || { enabled: () => false, requireAuth: false };
 
 const PROVIDERS = {
@@ -20,6 +21,7 @@ const AVAILABLE_SOURCES = [
 
 const state = {
   data: { papers: [], topics: [], sources: [], stats: {}, runtime: {} },
+  starred: [],
   filters: { query: "", topic: "all", level: "all", journal: "all", view: "date", date: "" },
   theme: "dark",
   account: { user: null, credentials: [] },
@@ -33,6 +35,7 @@ const nodes = {
   dateCount: document.querySelector("#dateCount"),
   allCount: document.querySelector("#allCount"),
   highlightCount: document.querySelector("#highlightCount"),
+  starCount: document.querySelector("#starCount"),
   configSource: document.querySelector("#configSource"),
   updatedAt: document.querySelector("#updatedAt"),
   viewTitle: document.querySelector("#viewTitle"),
@@ -44,6 +47,7 @@ const nodes = {
   aiCount: document.querySelector("#aiCount"),
   topScore: document.querySelector("#topScore"),
   paperList: document.querySelector("#paperList"),
+  toolbar: document.querySelector("#filterToolbar"),
   topicFilter: document.querySelector("#topicFilter"),
   levelFilter: document.querySelector("#levelFilter"),
   journalFilter: document.querySelector("#journalFilter"),
@@ -151,6 +155,31 @@ function collectionDates(paper) {
 function scoreOf(paper) { return Number(paper.best_match?.score || 0); }
 function levelOf(paper) { return String(paper.best_match?.level || "low").toLowerCase(); }
 function journalOf(paper) { return paper.journal_profile || {}; }
+
+function paperKey(paper) {
+  return String(paper.id || paper.doi || paper.paper_url || paper.title || "paper");
+}
+
+function starredEntry(paper) {
+  const key = typeof paper === "string" ? paper : paperKey(paper);
+  return state.starred.find((entry) => entry.paper_id === key) || null;
+}
+
+function starredPapers() {
+  return state.starred.map((entry) => entry.payload).filter(Boolean);
+}
+
+function loadLocalStars() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(STAR_STORAGE_KEY) || "[]");
+    return Array.isArray(rows) ? rows.filter((row) => row?.paper_id && row?.payload) : [];
+  } catch { return []; }
+}
+
+function saveLocalStars() {
+  try { localStorage.setItem(STAR_STORAGE_KEY, JSON.stringify(state.starred)); }
+  catch { /* local storage unavailable */ }
+}
 
 function startOfWeek(date) {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -279,7 +308,163 @@ function renderPaper(paper) {
   const download = node.querySelector(".download-link");
   download.href = pdfUrl;
   download.setAttribute("download", safeFilename(paper));
+  const starButton = node.querySelector(".star-button");
+  const isStarred = Boolean(starredEntry(paper));
+  starButton.classList.toggle("starred", isStarred);
+  starButton.setAttribute("aria-pressed", String(isStarred));
+  starButton.title = isStarred ? "从 Star 文献移除" : "加入 Star 文献";
+  starButton.querySelector(".star-icon").textContent = isStarred ? "★" : "☆";
+  starButton.querySelector(".star-label").textContent = isStarred ? "Starred" : "Star";
+  starButton.addEventListener("click", () => toggleStar(paper));
   return node;
+}
+
+async function toggleStar(paper) {
+  const key = paperKey(paper);
+  const existing = starredEntry(key);
+  const previous = [...state.starred];
+  if (existing) state.starred = state.starred.filter((entry) => entry.paper_id !== key);
+  else state.starred = [{ paper_id: key, payload: paper, created_at: new Date().toISOString() }, ...state.starred];
+  renderDateNavigation();
+  render();
+  try {
+    if (backend.enabled()) await backend.setStarredPaper(key, paper, !existing);
+    else saveLocalStars();
+    showToast(existing ? "已从 Star 文献移除" : "已加入 Star 文献与思维树");
+  } catch (error) {
+    state.starred = previous;
+    renderDateNavigation();
+    render();
+    const missingTable = /user_starred_papers|schema cache|could not find the table/i.test(error.message || "");
+    showToast(missingTable ? "请先在 Supabase 执行 Star 数据库迁移" : (error.message || "Star 保存失败"));
+  }
+}
+
+function mindTreeKeywords(paper) {
+  const text = `${paper.title || ""} ${paper.summary || ""}`.toLowerCase();
+  const topic = (state.data.topics || []).find((item) => item.id === paper.best_match?.topic_id);
+  const configured = (topic?.keywords || []).filter((keyword) => text.includes(String(keyword).toLowerCase()));
+  const reason = String(paper.best_match?.reason || "").replace(/^匹配关键词[：:]\s*/, "");
+  const matched = reason && !reason.includes("弱相关") ? reason.split(/[,，]/).map((item) => item.trim()) : [];
+  const categories = (paper.categories || []).filter(Boolean);
+  return [...new Set([...matched, ...configured, ...categories])].filter(Boolean).slice(0, 7);
+}
+
+function appendTreeText(parent, label, value, className = "") {
+  const row = document.createElement("div");
+  row.className = `tree-detail ${className}`.trim();
+  const term = document.createElement("strong");
+  term.textContent = label;
+  const content = document.createElement("p");
+  content.textContent = value || "摘要未说明";
+  row.append(term, content);
+  parent.appendChild(row);
+}
+
+function renderStarTree() {
+  const papers = starredPapers();
+  nodes.paperList.textContent = "";
+  nodes.paperList.classList.toggle("mind-tree-list", true);
+  nodes.resultCount.textContent = `${state.filters.view === "starred" ? state.starred.length : papers.length} 篇`;
+  if (!papers.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state star-empty";
+    empty.textContent = "还没有 Star 文献。点击任意论文下方的 ☆ Star，即可在这里生成研究思维树。";
+    nodes.paperList.appendChild(empty);
+    return;
+  }
+
+  const tree = document.createElement("div");
+  tree.className = "mind-tree";
+  const root = document.createElement("div");
+  root.className = "tree-root";
+  const rootIcon = document.createElement("span");
+  rootIcon.textContent = "★";
+  const rootCopy = document.createElement("div");
+  const rootTitle = document.createElement("strong");
+  rootTitle.textContent = "Star 文献库";
+  const rootMeta = document.createElement("small");
+  rootMeta.textContent = `${papers.length} 篇 · 关键词与研究方法图谱`;
+  rootCopy.append(rootTitle, rootMeta);
+  root.append(rootIcon, rootCopy);
+  tree.appendChild(root);
+
+  const groups = new Map();
+  for (const paper of papers) {
+    const topic = paper.best_match?.topic_name || "其他研究方向";
+    if (!groups.has(topic)) groups.set(topic, []);
+    groups.get(topic).push(paper);
+  }
+
+  const branches = document.createElement("div");
+  branches.className = "tree-branches";
+  for (const [topic, topicPapers] of groups) {
+    const branch = document.createElement("section");
+    branch.className = "tree-branch";
+    const heading = document.createElement("div");
+    heading.className = "tree-topic";
+    const headingTitle = document.createElement("strong");
+    headingTitle.textContent = topic;
+    const headingCount = document.createElement("span");
+    headingCount.textContent = `${topicPapers.length} 篇`;
+    heading.append(headingTitle, headingCount);
+    branch.appendChild(heading);
+
+    const paperNodes = document.createElement("div");
+    paperNodes.className = "tree-papers";
+    for (const paper of topicPapers) {
+      const card = document.createElement("article");
+      card.className = "tree-paper";
+      const cardHead = document.createElement("div");
+      cardHead.className = "tree-paper-head";
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = paper.title || "未命名文献";
+      const meta = document.createElement("span");
+      meta.textContent = `${journalOf(paper).name || paper.journal || "期刊待补充"} · ${formatDate(paper.published)}`;
+      titleWrap.append(title, meta);
+      const unstar = document.createElement("button");
+      unstar.className = "star-button starred compact-star";
+      unstar.type = "button";
+      unstar.setAttribute("aria-label", `取消 Star：${paper.title || "文献"}`);
+      unstar.innerHTML = '<span class="star-icon" aria-hidden="true">★</span><span class="star-label">Starred</span>';
+      unstar.addEventListener("click", () => toggleStar(paper));
+      cardHead.append(titleWrap, unstar);
+      card.appendChild(cardHead);
+
+      const keywords = document.createElement("div");
+      keywords.className = "tree-keywords";
+      const keywordLabel = document.createElement("strong");
+      keywordLabel.textContent = "关键词";
+      keywords.appendChild(keywordLabel);
+      const values = mindTreeKeywords(paper);
+      for (const value of (values.length ? values : ["待补充"])) {
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        keywords.appendChild(chip);
+      }
+      card.appendChild(keywords);
+      const summary = paper.chinese_summary || {};
+      const details = document.createElement("div");
+      details.className = "tree-details";
+      appendTreeText(details, "研究问题", summary.problem);
+      appendTreeText(details, "研究方法", summary.method, "method-detail");
+      appendTreeText(details, "创新", summary.innovation);
+      card.appendChild(details);
+      const original = document.createElement("a");
+      original.className = "tree-paper-link";
+      original.href = paper.paper_url || paper.pdf_url || "#";
+      original.target = "_blank";
+      original.rel = "noreferrer";
+      original.textContent = "查看原文 ↗";
+      card.appendChild(original);
+      paperNodes.appendChild(card);
+    }
+    branch.appendChild(paperNodes);
+    branches.appendChild(branch);
+  }
+  tree.appendChild(branches);
+  nodes.paperList.appendChild(tree);
 }
 
 function renderDateNavigation() {
@@ -293,6 +478,7 @@ function renderDateNavigation() {
     return seen && seen >= startOfWeek(newest) && seen < endOfWeek(newest) && scoreOf(paper) >= 0.55;
   });
   nodes.highlightCount.textContent = String(highlights.length);
+  nodes.starCount.textContent = String(state.starred.length);
   let currentMonth = "";
   for (const [key, count] of groups) {
     const month = key.slice(0, 7);
@@ -316,6 +502,7 @@ function renderDateNavigation() {
 function viewCopy() {
   if (state.filters.view === "all") return ["全部文献", "所有已收录的硒机制论文"];
   if (state.filters.view === "highlights") return ["本周精选", "按匹配度筛选的本周重点论文"];
+  if (state.filters.view === "starred") return ["Star 思维树", "按研究方向连接关键词、研究问题与方法"];
   return ["每日抓取", formatDate(`${state.filters.date}T12:00:00`)];
 }
 
@@ -329,15 +516,24 @@ function updateStatus(papers) {
   nodes.viewTitle.textContent = copy[0];
   nodes.listTitle.textContent = copy[0];
   nodes.scopeLabel.textContent = copy[1];
-  nodes.resultCount.textContent = `${papers.length} 篇`;
+  nodes.resultCount.textContent = `${state.filters.view === "starred" ? state.starred.length : papers.length} 篇`;
   nodes.paperCount.textContent = String(state.data.papers?.length || 0);
-  nodes.selectedCount.textContent = String(papers.length);
+  nodes.selectedCount.textContent = String(state.filters.view === "starred" ? state.starred.length : papers.length);
   nodes.aiCount.textContent = String((state.data.papers || []).filter((paper) => paper.summary_engine === "ai").length);
   nodes.topScore.textContent = (state.data.papers || []).reduce((maximum, paper) => Math.max(maximum, scoreOf(paper)), 0).toFixed(2);
 }
 
 function render() {
+  const starredView = state.filters.view === "starred";
+  nodes.toolbar.hidden = starredView;
+  if (starredView) {
+    updateActiveNavigation();
+    updateStatus([]);
+    renderStarTree();
+    return;
+  }
   const papers = filteredPapers();
+  nodes.paperList.classList.remove("mind-tree-list");
   updateActiveNavigation();
   updateStatus(papers);
   nodes.paperList.textContent = "";
@@ -805,6 +1001,7 @@ async function loadAuthenticatedWorkspace() {
   try { state.account.credentials = await backend.credentialStatus(); }
   catch (error) { state.account.credentials = []; console.warn("Credential status unavailable", error); }
   state.account.user = workspace.user;
+  state.starred = workspace.starredPapers || [];
   const latestRun = workspace.latestRun;
   state.data = {
     data_kind: "selenium_mechanism",
@@ -852,7 +1049,10 @@ async function main() {
     }
   }
 
-  try { state.data = await loadStaticData(); }
+  try {
+    state.data = await loadStaticData();
+    state.starred = loadLocalStars();
+  }
   catch (error) {
     updateGeneratedStatus(`数据读取失败：${error.message}`);
     nodes.paperList.textContent = "文献数据加载失败，请稍后刷新。";

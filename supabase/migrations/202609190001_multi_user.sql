@@ -24,6 +24,20 @@ create table if not exists public.user_papers (
 create index if not exists user_papers_user_last_seen_idx
   on public.user_papers (user_id, last_seen_at desc);
 
+-- Starred papers are stored as account-owned snapshots so a collection refresh
+-- cannot remove a user's reading list or its mind-tree content.
+create table if not exists public.user_starred_papers (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  paper_id text not null,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, paper_id)
+);
+
+create index if not exists user_starred_papers_user_created_idx
+  on public.user_starred_papers (user_id, created_at desc);
+
 create table if not exists public.collection_runs (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -65,18 +79,21 @@ create table if not exists public.user_api_credentials (
 
 alter table public.user_settings enable row level security;
 alter table public.user_papers enable row level security;
+alter table public.user_starred_papers enable row level security;
 alter table public.collection_runs enable row level security;
 alter table public.collection_requests enable row level security;
 alter table public.user_api_credentials enable row level security;
 
 revoke all on table public.user_settings from anon, authenticated;
 revoke all on table public.user_papers from anon, authenticated;
+revoke all on table public.user_starred_papers from anon, authenticated;
 revoke all on table public.collection_runs from anon, authenticated;
 revoke all on table public.collection_requests from anon, authenticated;
 revoke all on table public.user_api_credentials from anon, authenticated;
 
 grant select, insert, update on table public.user_settings to authenticated;
 grant select on table public.user_papers to authenticated;
+grant select, insert, update, delete on table public.user_starred_papers to authenticated;
 grant select on table public.collection_runs to authenticated;
 grant select, insert on table public.collection_requests to authenticated;
 grant usage, select on sequence public.collection_requests_id_seq to authenticated;
@@ -97,6 +114,12 @@ create policy "update own settings" on public.user_settings
 drop policy if exists "read own papers" on public.user_papers;
 create policy "read own papers" on public.user_papers
   for select to authenticated using ((select auth.uid()) = user_id);
+
+drop policy if exists "manage own starred papers" on public.user_starred_papers;
+create policy "manage own starred papers" on public.user_starred_papers
+  for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "read own runs" on public.collection_runs;
 create policy "read own runs" on public.collection_runs
