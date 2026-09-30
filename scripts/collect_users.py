@@ -417,10 +417,18 @@ def main() -> int:
         "collection_requests",
         query={"select": "id,user_id,clear_cache", "status": "eq.pending", "order": "requested_at.asc"},
     ) or []
-    map_requests = rest.request(
-        "research_map_requests",
-        query={"select": "id,user_id", "status": "eq.pending", "order": "requested_at.asc"},
-    ) or []
+    try:
+        map_requests = rest.request(
+            "research_map_requests",
+            query={"select": "id,user_id", "status": "eq.pending", "order": "requested_at.asc"},
+        ) or []
+    except RuntimeError as exc:
+        # Keep collection and Pages deployment working while an existing
+        # installation is applying the optional research-map migration.
+        if "research_map_requests" not in str(exc) or "(404)" not in str(exc):
+            raise
+        print("Warning: research map tables are not installed yet; skipping map requests")
+        map_requests = []
     credentials_by_user: dict[str, list[dict[str, Any]]] = {}
     requests_by_user: dict[str, list[dict[str, Any]]] = {}
     map_requests_by_user: dict[str, list[dict[str, Any]]] = {}
