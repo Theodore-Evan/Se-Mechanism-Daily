@@ -51,17 +51,24 @@
     const activeSession = await session();
     if (!activeSession) throw new Error("请先登录。");
     const userId = activeSession.user.id;
-    const [settingsResult, papersResult, runResult, starredResult] = await Promise.all([
+    const [settingsResult, papersResult, runResult, starredResult, mapResult, mapRequestResult] = await Promise.all([
       current.from("user_settings").select("config,updated_at").eq("user_id", userId).maybeSingle(),
       current.from("user_papers").select("payload").eq("user_id", userId).order("last_seen_at", { ascending: false }),
       current.from("collection_runs").select("status,started_at,completed_at,stats,error_message").eq("user_id", userId).order("started_at", { ascending: false }).limit(1).maybeSingle(),
       current.from("user_starred_papers").select("paper_id,payload,created_at").eq("user_id", userId).order("created_at", { ascending: false }),
+      current.from("user_research_maps").select("payload,source_count,generated_at").eq("user_id", userId).maybeSingle(),
+      current.from("research_map_requests").select("status,requested_at,processed_at,error_message").eq("user_id", userId).order("requested_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     assertOk(settingsResult.error);
     assertOk(papersResult.error);
     assertOk(runResult.error);
     const starredTableMissing = starredResult.error?.code === "42P01" || /user_starred_papers/i.test(starredResult.error?.message || "");
     if (starredResult.error && !starredTableMissing) assertOk(starredResult.error);
+    const mapTablesMissing = [mapResult.error, mapRequestResult.error].some((error) => error?.code === "42P01" || /research_map/i.test(error?.message || ""));
+    if (!mapTablesMissing) {
+      assertOk(mapResult.error);
+      assertOk(mapRequestResult.error);
+    }
     const config = settingsResult.data?.config || null;
     const papers = (papersResult.data || []).map((row) => row.payload).filter(Boolean);
     const starredPapers = (starredResult.data || []).map((row) => ({
@@ -70,7 +77,16 @@
       created_at: row.created_at,
     })).filter((row) => row.paper_id && row.payload);
     const latestRun = runResult.data || null;
-    return { user: activeSession.user, config, papers, starredPapers, latestRun, settingsUpdatedAt: settingsResult.data?.updated_at || "" };
+    return {
+      user: activeSession.user,
+      config,
+      papers,
+      starredPapers,
+      latestRun,
+      researchMap: mapResult.data || null,
+      researchMapRequest: mapRequestResult.data || null,
+      settingsUpdatedAt: settingsResult.data?.updated_at || "",
+    };
   }
 
   async function setStarredPaper(paperId, payload, starred) {
@@ -130,6 +146,13 @@
     assertOk(error);
   }
 
+  async function queueResearchMap() {
+    const activeSession = await session();
+    if (!activeSession) throw new Error("登录已失效，请重新登录。");
+    const { error } = await getClient().from("research_map_requests").insert({ user_id: activeSession.user.id });
+    assertOk(error);
+  }
+
   function onAuthStateChange(callback) {
     const current = getClient();
     if (!current) return { unsubscribe() {} };
@@ -149,6 +172,7 @@
     credentialStatus,
     saveCredential,
     queueCollection,
+    queueResearchMap,
     onAuthStateChange,
   };
 })();

@@ -22,6 +22,8 @@ const AVAILABLE_SOURCES = [
 const state = {
   data: { papers: [], topics: [], sources: [], stats: {}, runtime: {} },
   starred: [],
+  researchMap: null,
+  researchMapRequest: null,
   filters: { query: "", topic: "all", level: "all", journal: "all", view: "date", date: "" },
   theme: "dark",
   account: { user: null, credentials: [] },
@@ -361,7 +363,7 @@ function appendTreeText(parent, label, value, className = "") {
   parent.appendChild(row);
 }
 
-function renderStarTree() {
+function renderLegacyStarTree() {
   const papers = starredPapers();
   nodes.paperList.textContent = "";
   nodes.paperList.classList.toggle("mind-tree-list", true);
@@ -467,6 +469,218 @@ function renderStarTree() {
   nodes.paperList.appendChild(tree);
 }
 
+const MAP_COLORS = ["#32d3ab", "#5b8cff", "#f3b54a", "#d678e7", "#ec6f78", "#75c95a", "#63c8e8"];
+
+function svgElement(name, attributes = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+  return element;
+}
+
+function mapYears(map) {
+  const years = (map.branches || []).flatMap((branch) => (branch.papers || []).map((paper) => Number(paper.year))).filter((year) => year > 1900 && year < 2200);
+  const current = new Date().getFullYear();
+  return { min: Math.min(...years, current) - 1, max: Math.max(...years, current) };
+}
+
+function showMapPaperDetail(detail, paper, branch, color) {
+  detail.textContent = "";
+  detail.style.setProperty("--branch-color", color);
+  const eyebrow = document.createElement("span");
+  eyebrow.className = "map-detail-eyebrow";
+  eyebrow.textContent = `${paper.year || "年份未知"} · ${branch.name}`;
+  const title = document.createElement("h3");
+  title.textContent = paper.title || "未命名文献";
+  const role = document.createElement("p");
+  role.className = "map-detail-role";
+  role.textContent = paper.role || "摘要未说明";
+  detail.append(eyebrow, title, role);
+  const grid = document.createElement("div");
+  grid.className = "map-detail-grid";
+  for (const [label, value] of [
+    ["核心发现", paper.finding], ["证据强度", paper.evidence], ["体系连接", paper.connection],
+    ["研究方法", (paper.methods || []).join(" · ")], ["实验模型", (paper.models || []).join(" · ")], ["机制节点", (paper.mechanisms || []).join(" · ")],
+  ]) appendTreeText(grid, label, value);
+  detail.appendChild(grid);
+}
+
+function renderResearchMapGraphic(map) {
+  const shell = document.createElement("section");
+  shell.className = "research-map-shell";
+  const header = document.createElement("div");
+  header.className = "research-map-heading";
+  const copy = document.createElement("div");
+  const eyebrow = document.createElement("span");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "AI RESEARCH SYSTEM";
+  const title = document.createElement("h2");
+  title.textContent = map.title || "我的研究体系";
+  const thesis = document.createElement("p");
+  thesis.textContent = map.thesis || "基于 Star 文献构建的机制与证据演进图。";
+  copy.append(eyebrow, title, thesis);
+  const stamp = document.createElement("span");
+  stamp.className = "map-generated-at";
+  stamp.textContent = state.researchMap?.generated_at ? `生成于 ${formatDate(state.researchMap.generated_at)}` : "AI 综合生成";
+  header.append(copy, stamp);
+  shell.appendChild(header);
+
+  const branches = (map.branches || []).slice(0, 7);
+  const { min, max } = mapYears(map);
+  const width = Math.max(920, 230 + branches.length * 230);
+  const height = Math.max(560, 230 + (max - min + 1) * 92);
+  const plotTop = 82;
+  const rootY = height - 86;
+  const yFor = (year) => {
+    const safeYear = Number(year) >= min && Number(year) <= max ? Number(year) : min;
+    return rootY - ((safeYear - min + 1) / (max - min + 2)) * (rootY - plotTop);
+  };
+  const viewport = document.createElement("div");
+  viewport.className = "research-map-viewport";
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "按年份排列的研究体系分支图" });
+  const defs = svgElement("defs");
+  svg.appendChild(defs);
+  const axisX = 72;
+  svg.appendChild(svgElement("line", { x1: axisX, y1: plotTop - 20, x2: axisX, y2: rootY + 8, class: "map-axis" }));
+  for (let year = min + 1; year <= max; year += Math.max(1, Math.ceil((max - min) / 7))) {
+    const y = yFor(year);
+    svg.appendChild(svgElement("line", { x1: axisX + 18, y1: y, x2: width - 30, y2: y, class: "map-year-line" }));
+    const label = svgElement("text", { x: axisX - 10, y: y + 4, class: "map-year-label", "text-anchor": "end" });
+    label.textContent = String(year);
+    svg.appendChild(label);
+  }
+  const rootX = 150 + ((branches.length - 1) * 230) / 2;
+  const rootName = map.root?.name || "核心研究问题";
+  const rootLabel = svgElement("text", { x: rootX, y: rootY + 38, class: "map-root-label", "text-anchor": "middle" });
+  rootLabel.textContent = rootName;
+  svg.appendChild(rootLabel);
+  svg.appendChild(svgElement("circle", { cx: rootX, cy: rootY, r: 13, class: "map-root-node" }));
+
+  const nodeLookup = new Map();
+  const branchPositions = new Map(branches.map((branch, index) => [branch.id, { x: 150 + index * 230, y: plotTop + 58 }]));
+  for (const link of (map.cross_links || [])) {
+    const source = branchPositions.get(link.source_branch);
+    const target = branchPositions.get(link.target_branch);
+    if (!source || !target) continue;
+    const curveY = Math.min(source.y, target.y) + 34;
+    const crossLink = svgElement("path", {
+      d: `M ${source.x} ${source.y} Q ${(source.x + target.x) / 2} ${curveY - 48}, ${target.x} ${target.y}`,
+      class: "map-cross-link",
+    });
+    const tooltip = svgElement("title");
+    tooltip.textContent = link.relationship || "跨分支联系";
+    crossLink.appendChild(tooltip);
+    svg.appendChild(crossLink);
+  }
+  branches.forEach((branch, branchIndex) => {
+    const color = MAP_COLORS[branchIndex % MAP_COLORS.length];
+    const targetX = 150 + branchIndex * 230;
+    const papers = [...(branch.papers || [])].sort((a, b) => Number(a.year || 0) - Number(b.year || 0));
+    const topY = Math.min(...papers.map((paper) => yFor(paper.year)), plotTop + 90) - 46;
+    const path = svgElement("path", {
+      d: `M ${rootX} ${rootY} C ${rootX} ${rootY - 115}, ${targetX} ${rootY - 145}, ${targetX} ${topY}`,
+      class: "map-branch-path", stroke: color,
+    });
+    svg.appendChild(path);
+    const branchLabel = svgElement("text", { x: targetX, y: Math.max(34, topY - 15), class: "map-branch-label", "text-anchor": "middle", fill: color });
+    branchLabel.textContent = branch.name || `分支 ${branchIndex + 1}`;
+    svg.appendChild(branchLabel);
+    papers.forEach((paper, paperIndex) => {
+      const y = yFor(paper.year) - (paperIndex % 2) * 14;
+      const side = paperIndex % 2 === 0 ? 1 : -1;
+      const x = targetX + side * 27;
+      svg.appendChild(svgElement("line", { x1: targetX, y1: y, x2: x, y2: y, class: "map-paper-stem", stroke: color }));
+      const group = svgElement("g", { class: "map-paper-node", tabindex: "0", role: "button", "aria-label": paper.title || "文献节点" });
+      const marker = svgElement(branch.priority === "core" ? "rect" : "circle", branch.priority === "core"
+        ? { x: x - 7, y: y - 7, width: 14, height: 14, rx: 3, fill: color }
+        : { cx: x, cy: y, r: branch.priority === "emerging" ? 6 : 7, fill: color });
+      group.appendChild(marker);
+      const short = String(paper.title || "未命名文献").replace(/\s+/g, " ").slice(0, 28);
+      const label = svgElement("text", { x: x + (side > 0 ? 12 : -12), y: y + 4, class: "map-paper-label", "text-anchor": side > 0 ? "start" : "end" });
+      label.textContent = `${short}${String(paper.title || "").length > 28 ? "…" : ""}`;
+      group.appendChild(label);
+      nodeLookup.set(group, { paper, branch, color });
+      svg.appendChild(group);
+    });
+  });
+  viewport.appendChild(svg);
+  shell.appendChild(viewport);
+
+  const detail = document.createElement("div");
+  detail.className = "research-map-detail";
+  const first = branches.flatMap((branch, index) => (branch.papers || []).map((paper) => ({ paper, branch, color: MAP_COLORS[index % MAP_COLORS.length] })))[0];
+  if (first) showMapPaperDetail(detail, first.paper, first.branch, first.color);
+  for (const [group, item] of nodeLookup) {
+    const activate = () => showMapPaperDetail(detail, item.paper, item.branch, item.color);
+    group.addEventListener("click", activate);
+    group.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") activate(); });
+  }
+  shell.appendChild(detail);
+
+  const insightGrid = document.createElement("div");
+  insightGrid.className = "map-insight-grid";
+  for (const [heading, values] of [["关键证据缺口", map.research_gaps], ["下一步研究问题", map.next_questions]]) {
+    const section = document.createElement("section");
+    const headingNode = document.createElement("h3");
+    headingNode.textContent = heading;
+    const list = document.createElement("ol");
+    for (const value of (values || [])) { const item = document.createElement("li"); item.textContent = value; list.appendChild(item); }
+    section.append(headingNode, list);
+    insightGrid.appendChild(section);
+  }
+  shell.appendChild(insightGrid);
+  return shell;
+}
+
+function renderStarLibrary(papers) {
+  const section = document.createElement("section");
+  section.className = "star-source-library";
+  const title = document.createElement("h2");
+  title.textContent = `体系来源 · ${papers.length} 篇 Star 文献`;
+  const grid = document.createElement("div");
+  grid.className = "star-source-grid";
+  for (const paper of papers) {
+    const card = document.createElement("article");
+    const heading = document.createElement("h3");
+    heading.textContent = paper.title || "未命名文献";
+    const meta = document.createElement("p");
+    meta.textContent = `${journalOf(paper).name || paper.journal || "期刊待补充"} · ${formatDate(paper.published)}`;
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "star-button starred compact-star"; button.textContent = "★ Starred";
+    button.addEventListener("click", () => toggleStar(paper));
+    card.append(heading, meta, button); grid.appendChild(card);
+  }
+  section.append(title, grid);
+  return section;
+}
+
+function renderStarTree() {
+  const papers = starredPapers();
+  nodes.paperList.textContent = "";
+  nodes.paperList.classList.add("mind-tree-list");
+  nodes.resultCount.textContent = `${papers.length} 篇`;
+  const hero = document.createElement("section");
+  hero.className = "map-build-hero";
+  const copy = document.createElement("div");
+  const title = document.createElement("h2"); title.textContent = "把 Star 文献融合为你的研究体系";
+  const note = document.createElement("p"); note.textContent = "模型会读取摘要与结构化总结，提炼机制主干、证据分支、实验方法、模型、演进关系与研究空白。";
+  copy.append(title, note);
+  const button = document.createElement("button");
+  button.type = "button"; button.className = "primary-button map-build-button";
+  const status = state.researchMapRequest?.status;
+  button.textContent = status === "pending" || status === "running" ? "生成任务处理中…" : (state.researchMap ? "用当前 Star 重新构建" : "AI 构建研究体系");
+  button.disabled = !papers.length || status === "pending" || status === "running" || !backend.enabled();
+  button.addEventListener("click", queueResearchMap);
+  hero.append(copy, button);
+  if (status === "failed") { const error = document.createElement("p"); error.className = "map-build-error"; error.textContent = `上次生成失败：${state.researchMapRequest.error_message || "请检查模型配置"}`; hero.appendChild(error); }
+  nodes.paperList.appendChild(hero);
+  if (!papers.length) {
+    const empty = document.createElement("div"); empty.className = "empty-state star-empty"; empty.textContent = "还没有 Star 文献。请先收藏希望纳入自己研究体系的论文。"; nodes.paperList.appendChild(empty); return;
+  }
+  if (state.researchMap?.payload?.branches?.length) nodes.paperList.appendChild(renderResearchMapGraphic(state.researchMap.payload));
+  else { const empty = document.createElement("div"); empty.className = "empty-state map-empty"; empty.textContent = "已有研究素材，但尚未进行跨文献 AI 综合。点击上方按钮后，后台会构建主干—分支—证据关系图。"; nodes.paperList.appendChild(empty); }
+  nodes.paperList.appendChild(renderStarLibrary(papers));
+}
+
 function renderDateNavigation() {
   const groups = dateGroups();
   nodes.dateNavigation.textContent = "";
@@ -502,7 +716,7 @@ function renderDateNavigation() {
 function viewCopy() {
   if (state.filters.view === "all") return ["全部文献", "所有已收录的硒机制论文"];
   if (state.filters.view === "highlights") return ["本周精选", "按匹配度筛选的本周重点论文"];
-  if (state.filters.view === "starred") return ["Star 思维树", "按研究方向连接关键词、研究问题与方法"];
+  if (state.filters.view === "starred") return ["AI 研究体系", "融合 Star 文献的机制分支、证据演进与研究空白"];
   return ["每日抓取", formatDate(`${state.filters.date}T12:00:00`)];
 }
 
@@ -883,6 +1097,19 @@ async function queueCollection(clearCache) {
   } catch (error) { showToast(error.message || "提交失败"); }
 }
 
+async function queueResearchMap() {
+  try {
+    if (!state.starred.length) throw new Error("请先 Star 至少一篇文献。");
+    await backend.queueResearchMap();
+    state.researchMapRequest = { status: "pending", requested_at: new Date().toISOString(), error_message: "" };
+    render();
+    showToast("研究体系生成任务已提交；后台处理完成后刷新页面即可查看");
+  } catch (error) {
+    const missingTable = /research_map|schema cache|could not find the table/i.test(error.message || "");
+    showToast(missingTable ? "请先在 Supabase 执行 AI 研究体系数据库迁移" : (error.message || "任务提交失败"));
+  }
+}
+
 function showAuthGate(message = "") {
   nodes.authGate.hidden = false;
   document.body.classList.add("auth-required");
@@ -1002,6 +1229,8 @@ async function loadAuthenticatedWorkspace() {
   catch (error) { state.account.credentials = []; console.warn("Credential status unavailable", error); }
   state.account.user = workspace.user;
   state.starred = workspace.starredPapers || [];
+  state.researchMap = workspace.researchMap || null;
+  state.researchMapRequest = workspace.researchMapRequest || null;
   const latestRun = workspace.latestRun;
   state.data = {
     data_kind: "selenium_mechanism",

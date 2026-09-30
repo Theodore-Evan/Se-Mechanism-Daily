@@ -956,7 +956,13 @@ def build_summary_prompt(topic: Topic, paper: dict[str, Any]) -> str:
 """
 
 
-def call_gemini_native(prompt: str, api_key: str, base_url: str, model: str) -> dict[str, Any]:
+def call_gemini_native(
+    prompt: str,
+    api_key: str,
+    base_url: str,
+    model: str,
+    response_schema: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     api_root = base_url.split("/openai", 1)[0].rstrip("/")
     endpoint = f"{api_root}/models/{urllib.parse.quote(model, safe='')}:generateContent"
     current_payload = {
@@ -966,7 +972,7 @@ def call_gemini_native(prompt: str, api_key: str, base_url: str, model: str) -> 
             "responseFormat": {
                 "text": {
                     "mimeType": "application/json",
-                    "schema": SUMMARY_SCHEMA,
+                    "schema": response_schema or SUMMARY_SCHEMA,
                 }
             },
         },
@@ -987,7 +993,7 @@ def call_gemini_native(prompt: str, api_key: str, base_url: str, model: str) -> 
             "generationConfig": {
                 "temperature": 0.2,
                 "responseMimeType": "application/json",
-                "responseSchema": SUMMARY_SCHEMA,
+                "responseSchema": response_schema or SUMMARY_SCHEMA,
             },
         }
         data = request_json(

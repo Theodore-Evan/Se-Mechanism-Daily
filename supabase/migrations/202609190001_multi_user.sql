@@ -64,6 +64,26 @@ create table if not exists public.collection_requests (
 create index if not exists collection_requests_pending_idx
   on public.collection_requests (status, requested_at);
 
+create table if not exists public.user_research_maps (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  payload jsonb not null default '{}'::jsonb,
+  source_count integer not null default 0,
+  generated_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.research_map_requests (
+  id bigint generated always as identity primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'running', 'completed', 'failed')),
+  requested_at timestamptz not null default now(),
+  processed_at timestamptz,
+  error_message text not null default ''
+);
+
+create index if not exists research_map_requests_pending_idx
+  on public.research_map_requests (status, requested_at);
+
 -- This table is intentionally unavailable to browser roles. Ciphertext is
 -- written by the authenticated Edge Function and read by the service job.
 create table if not exists public.user_api_credentials (
@@ -82,6 +102,8 @@ alter table public.user_papers enable row level security;
 alter table public.user_starred_papers enable row level security;
 alter table public.collection_runs enable row level security;
 alter table public.collection_requests enable row level security;
+alter table public.user_research_maps enable row level security;
+alter table public.research_map_requests enable row level security;
 alter table public.user_api_credentials enable row level security;
 
 revoke all on table public.user_settings from anon, authenticated;
@@ -89,6 +111,8 @@ revoke all on table public.user_papers from anon, authenticated;
 revoke all on table public.user_starred_papers from anon, authenticated;
 revoke all on table public.collection_runs from anon, authenticated;
 revoke all on table public.collection_requests from anon, authenticated;
+revoke all on table public.user_research_maps from anon, authenticated;
+revoke all on table public.research_map_requests from anon, authenticated;
 revoke all on table public.user_api_credentials from anon, authenticated;
 
 grant select, insert, update on table public.user_settings to authenticated;
@@ -97,6 +121,9 @@ grant select, insert, update, delete on table public.user_starred_papers to auth
 grant select on table public.collection_runs to authenticated;
 grant select, insert on table public.collection_requests to authenticated;
 grant usage, select on sequence public.collection_requests_id_seq to authenticated;
+grant select on table public.user_research_maps to authenticated;
+grant select, insert on table public.research_map_requests to authenticated;
+grant usage, select on sequence public.research_map_requests_id_seq to authenticated;
 
 drop policy if exists "read own settings" on public.user_settings;
 create policy "read own settings" on public.user_settings
@@ -131,6 +158,18 @@ create policy "read own requests" on public.collection_requests
 
 drop policy if exists "create own requests" on public.collection_requests;
 create policy "create own requests" on public.collection_requests
+  for insert to authenticated with check ((select auth.uid()) = user_id);
+
+drop policy if exists "read own research map" on public.user_research_maps;
+create policy "read own research map" on public.user_research_maps
+  for select to authenticated using ((select auth.uid()) = user_id);
+
+drop policy if exists "read own research map requests" on public.research_map_requests;
+create policy "read own research map requests" on public.research_map_requests
+  for select to authenticated using ((select auth.uid()) = user_id);
+
+drop policy if exists "create own research map requests" on public.research_map_requests;
+create policy "create own research map requests" on public.research_map_requests
   for insert to authenticated with check ((select auth.uid()) = user_id);
 
 -- There is deliberately no browser policy for user_api_credentials.
