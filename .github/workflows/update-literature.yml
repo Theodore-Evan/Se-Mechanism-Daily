@@ -77,7 +77,10 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           USER_SECRET_MASTER_KEY: ${{ secrets.USER_SECRET_MASTER_KEY }}
-          COLLECT_PENDING_ONLY: ${{ github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *' && 'true' || 'false' }}
+          # A code push must not recollect every account before Pages can deploy.
+          # Multi-user push/queue runs process only explicit pending requests;
+          # the daily schedule remains the full refresh.
+          COLLECT_PENDING_ONLY: ${{ vars.MULTI_USER_MODE == 'true' && (github.event_name == 'push' || (github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *')) && 'true' || 'false' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CONFIG_ISSUE_TITLE: Research Interests
           LOOKBACK_DAYS: ${{ github.event_name == 'workflow_dispatch' && inputs.lookback_days || vars.LOOKBACK_DAYS || '1' }}
